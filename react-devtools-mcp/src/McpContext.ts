@@ -27,6 +27,10 @@ export class McpContext {
     }
     const targetUrl = process.env.TARGET_URL;
     if (targetUrl) {
+      // Install the backend hook before the app loads React.
+      await this.ensureReactAttached().catch(error =>
+        logger(`Preload React hook failed: ${String(error)}`),
+      );
       logger(`Navigating to ${targetUrl}`);
       await this.#selectedPage.goto(targetUrl, {waitUntil: 'domcontentloaded'});
     }

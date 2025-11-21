@@ -1,4 +1,6 @@
+import fs from 'node:fs';
 import path from 'node:path';
+import {createRequire} from 'node:module';
 
 import {logger} from './logger.js';
 import type {ReactAttachResult, ReactRootInfo} from './tools/ToolDefinition.js';
@@ -13,6 +15,7 @@ export class ReactSession {
   #page: Page;
   #backendInjected = false;
   static #backendPath: string | null = null;
+  static #backendSource: string | null = null;
 
   constructor(page: Page) {
     this.#page = page;
@@ -22,11 +25,20 @@ export class ReactSession {
     if (this.#backendPath) {
       return this.#backendPath;
     }
-    // The published `react-devtools-inline` package ships a backend entry.
-    // We resolve to that file so we can inject it directly into the page.
-    const resolved = require.resolve('react-devtools-inline/backend');
+    // Use the published `react-devtools-core` backend bundle (UMD, browser-ready).
+    const require = createRequire(import.meta.url);
+    const resolved = require.resolve('react-devtools-core/dist/backend.js');
     this.#backendPath = resolved;
     return resolved;
+  }
+
+  static getBackendSource(): string {
+    if (this.#backendSource) {
+      return this.#backendSource;
+    }
+    const file = this.resolveBackendPath();
+    this.#backendSource = fs.readFileSync(file, 'utf8');
+    return this.#backendSource;
   }
 
   async ensureBackendInjected(): Promise<void> {
@@ -34,16 +46,60 @@ export class ReactSession {
       return;
     }
 
+    // Ensure CSP doesn't block our injected scripts.
+    await this.#page.setBypassCSP(true);
+
     // Try to install hook early for subsequent navigations.
     const backendPath = ReactSession.resolveBackendPath();
-    await this.#page.evaluateOnNewDocument(
-      ({backendPath}) => {
-        const script = document.createElement('script');
-        script.src = backendPath;
-        document.documentElement.appendChild(script);
-      },
-      {backendPath},
-    );
+    const backendSource = ReactSession.getBackendSource();
+    const hookBootstrap = `
+      (function initReactHook(){
+        const existing = globalThis.__REACT_DEVTOOLS_GLOBAL_HOOK__;
+        const renderers = existing?.renderers || new Map();
+        const fiberRoots = existing?.getFiberRoots
+          ? existing.getFiberRoots
+          : (id) => fiberRootsMap.get(id) || new Set();
+        const fiberRootsMap = existing?._fiberRoots || new Map();
+        let nextId = renderers.size + 1;
+        const injectBase = typeof existing?.inject === 'function' ? existing.inject : null;
+        const onCommitBase =
+          typeof existing?.onCommitFiberRoot === 'function'
+            ? existing.onCommitFiberRoot
+            : null;
+        const hook = existing || {};
+        hook.supportsFiber = true;
+        hook.renderers = renderers;
+        hook._fiberRoots = fiberRootsMap;
+        hook.getFiberRoots = id => fiberRootsMap.get(id) || new Set();
+        hook.inject = function (renderer) {
+          const id = injectBase ? injectBase.call(this, renderer) : nextId++;
+          try { renderers.set(id, renderer); } catch (e) {}
+          return id;
+        };
+        hook.onCommitFiberRoot = function (id, root, ...rest) {
+          let roots = fiberRootsMap.get(id);
+          if (!roots) {
+            roots = new Set();
+            fiberRootsMap.set(id, roots);
+          }
+          roots.add(root);
+          if (onCommitBase) {
+            try { onCommitBase.call(this, id, root, ...rest); } catch (e) {}
+          }
+        };
+        globalThis.__REACT_DEVTOOLS_GLOBAL_HOOK__ = hook;
+      })();
+    `;
+    await this.#page.evaluateOnNewDocument((source, bootstrap) => {
+      try {
+        // eslint-disable-next-line no-eval
+        eval(bootstrap);
+        // eslint-disable-next-line no-eval
+        eval(source);
+      } catch (e) {
+        console.warn('React DevTools MCP preload failed', e);
+      }
+    }, backendSource, hookBootstrap);
 
     let hasHook = await this.#page.evaluate(() => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -56,7 +112,19 @@ export class ReactSession {
 
     logger(`Injecting React DevTools backend from ${backendPath}`);
     try {
-      await this.#page.addScriptTag({path: backendPath});
+      // Re-install at runtime to win against any later shims.
+      await this.#page.evaluate((source, bootstrap) => {
+        try {
+          // eslint-disable-next-line no-eval
+          eval(bootstrap);
+          // eslint-disable-next-line no-eval
+          eval(source);
+        } catch (e) {
+          console.warn('React DevTools MCP runtime inject failed', e);
+        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return Boolean((window as any).__REACT_DEVTOOLS_GLOBAL_HOOK__);
+      }, backendSource, hookBootstrap);
 
       // If hook still absent, reload once to let the init script run before React loads.
       hasHook = await this.#page.evaluate(() => {
@@ -141,64 +209,73 @@ export class ReactSession {
 
   async listRoots(): Promise<ReactRootInfo[]> {
     await this.ensureBackendInjected();
-    const roots = await this.#page.evaluate(() => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const hook = (window as any).__REACT_DEVTOOLS_GLOBAL_HOOK__;
-      if (!hook || !hook.renderers || !hook.getFiberRoots) {
-        return [];
-      }
-      const results: Array<{
-        rendererId: number;
-        rendererName?: string;
-        rendererVersion?: string;
-        rootId: string;
-        rootIndex: number;
-        displayName?: string;
-        nodes?: number;
-      }> = [];
-      hook.renderers.forEach(
-        (
-          value: {
-            rendererPackageName?: string;
-            rendererVersion?: string;
-            bundleType?: number;
-          },
-          rendererId: number,
-        ) => {
-          const fiberRoots = hook.getFiberRoots(rendererId);
-          if (!fiberRoots || fiberRoots.size === 0) {
-            return;
-          }
-          fiberRoots.forEach((root: any, idx: number) => {
-            const displayName =
-              root?.current?.elementType?.displayName ??
-              root?.current?.elementType?.name ??
-              'Unknown';
-            // Count nodes roughly by walking depth-first with a cap to avoid runaway.
-            let count = 0;
-            const stack = [root?.current];
-            const limit = 2000;
-            while (stack.length && count < limit) {
-              const node = stack.pop();
-              if (!node) continue;
-              count++;
-              if (node.child) stack.push(node.child);
-              if (node.sibling) stack.push(node.sibling);
+    const {results, error} = await this.#page.evaluate(() => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const hook = (window as any).__REACT_DEVTOOLS_GLOBAL_HOOK__;
+        if (!hook || !hook.renderers || !hook.getFiberRoots) {
+          return {results: [], error: null};
+        }
+        const results: Array<{
+          rendererId: number;
+          rendererName?: string;
+          rendererVersion?: string;
+          rootId: string;
+          rootIndex: number;
+          displayName?: string;
+          nodes?: number;
+        }> = [];
+        hook.renderers.forEach(
+          (
+            value: {
+              rendererPackageName?: string;
+              rendererVersion?: string;
+              bundleType?: number;
+            },
+            rendererId: number,
+          ) => {
+            const fiberRoots = hook.getFiberRoots(rendererId);
+            if (!fiberRoots || fiberRoots.size === 0) {
+              return;
             }
-            results.push({
-              rendererId,
-              rendererName: value.rendererPackageName,
-              rendererVersion: value.rendererVersion,
-              rootId: `${rendererId}:${idx}`,
-              rootIndex: idx,
-              displayName,
-              nodes: count,
+            let idx = 0;
+            fiberRoots.forEach((root: any) => {
+              const displayName =
+                root?.current?.elementType?.displayName ??
+                root?.current?.elementType?.name ??
+                'Unknown';
+              // Count nodes roughly by walking depth-first with a cap to avoid runaway.
+              let count = 0;
+              const stack = [root?.current];
+              const limit = 2000;
+              while (stack.length && count < limit) {
+                const node = stack.pop();
+                if (!node) continue;
+                count++;
+                if (node.child) stack.push(node.child);
+                if (node.sibling) stack.push(node.sibling);
+              }
+              results.push({
+                rendererId,
+                rendererName: value.rendererPackageName,
+                rendererVersion: value.rendererVersion,
+                rootId: `${rendererId}:${idx}`,
+                rootIndex: idx,
+                displayName,
+                nodes: count,
+              });
+              idx++;
             });
-          });
-        },
-      );
-      return results;
+          },
+        );
+        return {results, error: null};
+      } catch (e) {
+        return {results: [], error: (e as Error).message};
+      }
     });
-    return roots;
+    if (error) {
+      throw new Error(error);
+    }
+    return results;
   }
 }
