@@ -1,5 +1,7 @@
+#!/usr/bin/env node
+
 /**
- * React DevTools MCP Server (prototype).
+ * React DevTools MCP Server
  */
 import {ensureBrowserConnected, ensureBrowserLaunched} from './browser.js';
 import {parseArguments} from './cli.js';

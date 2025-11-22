@@ -1,7 +1,7 @@
 {
   "name": "react-devtools-mcp",
   "version": "0.1.0",
-  "description": "MCP server exposing React DevTools capabilities against a live Chrome instance",
+  "description": "MCP server for React DevTools - inspect React applications via Model Context Protocol",
   "type": "module",
   "bin": "./build/src/main.js",
   "main": "./build/src/main.js",
@@ -9,14 +9,35 @@
     "clean": "node -e \"require('fs').rmSync('build', {recursive: true, force: true})\"",
     "build": "tsc",
     "start": "npm run build && node build/src/main.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepare": "npm run build"
   },
   "files": [
     "build/src",
     "LICENSE",
+    "README.md",
     "!*.tsbuildinfo"
   ],
-  "repository": "local/react-devtools-mcp",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "react",
+    "react-devtools",
+    "debugging",
+    "chrome-devtools",
+    "puppeteer",
+    "ai",
+    "llm"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/uxfreak/React-Devtools-MCP.git"
+  },
+  "bugs": {
+    "url": "https://github.com/uxfreak/React-Devtools-MCP/issues"
+  },
+  "homepage": "https://github.com/uxfreak/React-Devtools-MCP#readme",
+  "author": "uxfreak",
   "license": "Apache-2.0",
   "engines": {
     "node": "^20.19.0 || ^22.12.0 || >=23"

@@ -1,20 +1,151 @@
 # React DevTools MCP Server
 
-MCP server that exposes React DevTools capabilities for inspecting React applications via the Model Context Protocol.
+[![npm react-devtools-mcp package](https://img.shields.io/npm/v/react-devtools-mcp.svg)](https://npmjs.org/package/react-devtools-mcp)
 
-## Features
+`react-devtools-mcp` lets your coding agent (such as Claude, Cursor, Copilot, or Gemini) inspect and debug React applications in a live Chrome browser. It acts as a Model Context Protocol (MCP) server, giving your AI coding assistant access to React component trees, props, state, and source locations for reliable debugging and development assistance.
 
-- **React Backend Injection** - Automatically injects React DevTools backend hook into pages
-- **Component Tree Inspection** - List and inspect React fiber tree with props, state, and source locations
-- **Accessibility Tree Snapshot** - Capture page structure with text content and CDP backendDOMNodeId for every element
+## Key Features
+
+- **React Component Tree Inspection** - List and inspect React fiber tree with props, state, and source locations
+- **Text-to-Component Mapping** - Find any visible text on the page and trace it back to the React component and source file
 - **Two Element-to-Component Mapping Methods**:
   - **CDP backendDOMNodeId** (Recommended) - Fast, deterministic direct element access via Chrome DevTools Protocol
   - **ARIA Selectors** (Legacy) - Cross-session compatible element searching via accessibility tree
+- **Accessibility Tree Snapshot** - Capture page structure with text content and CDP backendDOMNodeId for every element
+- **React Backend Injection** - Automatically injects React DevTools backend hook into pages
 - **Component Highlighting** - Visual highlighting of React components in the browser
 
-## Installation
+## Disclaimers
+
+`react-devtools-mcp` exposes content of the browser instance to the MCP clients allowing them to inspect, debug, and modify any data in the browser or React DevTools. Avoid sharing sensitive or personal information that you don't want to share with MCP clients.
+
+## Requirements
+
+- [Node.js](https://nodejs.org/) v20.19 or a newer [latest maintenance LTS](https://github.com/nodejs/Release#release-schedule) version
+- [Chrome](https://www.google.com/chrome/) current stable version or newer
+- [npm](https://www.npmjs.com/)
+- React application with development build (for source location tracking)
+
+## Getting Started
+
+Add the following config to your MCP client:
+
+```json
+{
+  "mcpServers": {
+    "react-devtools": {
+      "command": "npx",
+      "args": ["-y", "react-devtools-mcp@latest"]
+    }
+  }
+}
+```
+
+> [!NOTE]
+> Using `react-devtools-mcp@latest` ensures that your MCP client will always use the latest version of the React DevTools MCP server.
+
+### MCP Client Configuration
+
+<details>
+  <summary>Claude Code</summary>
+  Use the Claude Code CLI to add the React DevTools MCP server:
 
 ```bash
+claude mcp add react-devtools npx react-devtools-mcp@latest
+```
+
+</details>
+
+<details>
+  <summary>Cursor</summary>
+
+Go to `Cursor Settings` -> `MCP` -> `New MCP Server`. Use the config provided above.
+
+Or add manually to your MCP configuration file:
+
+```json
+{
+  "mcpServers": {
+    "react-devtools": {
+      "command": "npx",
+      "args": ["-y", "react-devtools-mcp@latest"]
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+  <summary>Codex</summary>
+  Follow the <a href="https://github.com/openai/codex/blob/main/docs/advanced.md#model-context-protocol-mcp">configure MCP guide</a>
+  using the standard config from above. You can also install the React DevTools MCP server using the Codex CLI:
+
+```bash
+codex mcp add react-devtools -- npx react-devtools-mcp@latest
+```
+
+</details>
+
+<details>
+  <summary>Copilot / VS Code</summary>
+  Follow the MCP install <a href="https://code.visualstudio.com/docs/copilot/chat/mcp-servers#_add-an-mcp-server">guide</a>,
+  with the standard config from above. You can also install the React DevTools MCP server using the VS Code CLI:
+
+  ```bash
+  code --add-mcp '{"name":"react-devtools","command":"npx","args":["react-devtools-mcp@latest"]}'
+  ```
+</details>
+
+<details>
+  <summary>Windsurf</summary>
+  Follow the <a href="https://docs.windsurf.com/windsurf/cascade/mcp#mcp-config-json">configure MCP guide</a>
+  using the standard config from above.
+</details>
+
+<details>
+  <summary>Cline</summary>
+  Follow https://docs.cline.bot/mcp/configuring-mcp-servers and use the config provided above.
+</details>
+
+<details>
+  <summary>Other MCP Clients</summary>
+
+  For other MCP clients, add the following configuration:
+
+```json
+{
+  "mcpServers": {
+    "react-devtools": {
+      "command": "npx",
+      "args": ["-y", "react-devtools-mcp@latest"]
+    }
+  }
+}
+```
+
+</details>
+
+### Your First Prompt
+
+Enter the following prompt in your MCP Client to check if everything is working:
+
+```
+Navigate to http://localhost:3000 and find the "Sign up" button. Show me the React component and its source file.
+```
+
+Your MCP client should open the browser, take a snapshot, find the button, and show you the component information with source location.
+
+> [!NOTE]
+> The MCP server will start the browser automatically once the MCP client uses a tool that requires a running browser instance. Connecting to the React DevTools MCP server on its own will not automatically start the browser.
+
+## Manual Installation (Development)
+
+If you want to install from source:
+
+```bash
+git clone https://github.com/uxfreak/React-Devtools-MCP.git
+cd React-Devtools-MCP
 npm install
 npm run build
 ```
