@@ -33,8 +33,6 @@
 }
 ```
 
-**Example Result:** In production use, a developer analyzed 30+ components across a 6-screen signup flow, finding design system compliance issues that would have taken significantly longer to find manually.
-
 ---
 
 ## What You Can Do
