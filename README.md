@@ -317,67 +317,371 @@ Capture accessibility tree snapshot with backendDOMNodeId for every element.
 
 ## Common Workflows
 
-### Finding Component Source from UI Text (Recommended Method)
+### Workflow 1: Finding Component from UI Text
 
-Use CDP backendDOMNodeId for fastest, most reliable lookups:
+**Scenario:** Find the "Sign up" button and trace it to its React component and source file.
 
-```bash
-# 1. Take snapshot (includes backendDOMNodeId for every element)
-take_snapshot
+**Method 1: CDP backendDOMNodeId (Recommended)**
 
-# 2. Find your element in the snapshot JSON:
+Fastest and most reliable - uses direct DOM node ID:
+
+```typescript
+// Step 1: Take snapshot (includes backendDOMNodeId for every element)
+take_snapshot({ verbose: false })
+
+// Step 2: Find your element in the snapshot JSON:
 {
   "role": "button",
   "name": "Sign up",
-  "backendDOMNodeId": 48  ← Use this
+  "backendDOMNodeId": 48  // ← Use this
 }
 
-# 3. Get React component information
+// Step 3: Get complete component information
 get_react_component_from_backend_node_id(48)
 ```
 
 **Result:**
-- ✅ Component name: Button (ForwardRef)
-- ✅ Source: src/components/Button.tsx:42
-- ✅ Props: {variant: "primary", children: "Sign up"}
-- ✅ Owner chain: OnboardingScreen → App
-
-### Managing Multiple Pages
-
-```bash
-# List all open pages
-list_pages
-
-# Create a new page
-new_page("http://localhost:3001/admin")
-
-# Switch between pages
-select_page(1)
-
-# Navigate current page
-navigate_page(type="url", url="http://localhost:3001/settings")
-
-# Close a page
-close_page(1)
+```json
+{
+  "success": true,
+  "component": {
+    "name": "Button",
+    "type": "ForwardRef",
+    "source": {
+      "fileName": "src/design-system/atoms/Button/Button.tsx",
+      "lineNumber": 42,
+      "columnNumber": 8
+    },
+    "props": {
+      "variant": "primary",
+      "size": "large",
+      "children": "Sign up"
+    },
+    "owners": [
+      { "name": "OnboardingScreen", "source": "..." },
+      { "name": "App", "source": "..." }
+    ]
+  }
+}
 ```
 
-### Inspecting Component Tree
+**Method 2: ARIA Selector (Cross-Session)**
 
-```bash
-# 1. Ensure React is attached
-ensure_react_attached
+Works across different browser sessions:
 
-# 2. List roots
-list_react_roots
+```typescript
+get_react_component_from_snapshot({
+  role: "button",
+  name: "Sign up"
+})
+```
 
-# 3. Browse component tree
-list_components(depth=5, maxNodes=200)
+**When to use each:**
+- **CDP method:** Same browser session, faster, more deterministic
+- **ARIA method:** Cross-session, automated testing, stale-resistant
 
-# 4. Get detailed component info
+---
+
+### Workflow 2: Analyzing All Buttons on a Page
+
+**Scenario:** Audit all buttons for design system compliance.
+
+**Current approach (v0.1.0):**
+
+```typescript
+// Step 1: Get snapshot
+take_snapshot({ verbose: true })
+
+// Step 2: Manually find all button backendDOMNodeIds
+// NodeIds: 48, 52, 67, 89, 102...
+
+// Step 3: Inspect each individually
+get_react_component_from_backend_node_id(48)
+get_react_component_from_backend_node_id(52)
+// ... repeat for all buttons
+```
+
+**Future approach (v0.2.0 - See Issue #10):**
+
+```typescript
+// Single call to get all buttons
+get_react_components({
+  componentName: "Button",
+  includeProps: true
+})
+
+// Returns array of all Button components with props
+// Can then filter by variant, source, etc.
+```
+
+**Use cases:**
+- ✅ Design system compliance checking
+- ✅ Finding deprecated prop usage
+- ✅ Component usage auditing
+- ✅ Generating component inventories
+
+---
+
+### Workflow 3: Multi-Page Navigation & Analysis
+
+**Scenario:** Analyze a 6-screen signup flow for consistent TextField usage.
+
+```typescript
+// Page 1: Email screen
+new_page("http://localhost:3000/signup/email")
+take_snapshot()
+get_react_component_from_backend_node_id(...)  // Email TextField
+
+// Page 2: Personal info
+navigate_page({ type: "url", url: "/signup/personal-info" })
+take_snapshot()
+// Inspect first name, last name TextFields
+
+// Page 3: Password
+navigate_page({ type: "url", url: "/signup/password" })
+// Continue analysis...
+
+// List all pages
+list_pages()
+// Shows: 0: /email [selected], 1: /personal-info, 2: /password
+
+// Switch back to previous page
+select_page(1)
+```
+
+**Real-world use case:**
+- User analyzed 30+ components across 6 screens
+- Found inconsistent TextField props
+- Generated compliance report
+
+---
+
+### Workflow 4: Design System Migration
+
+**Scenario:** Find all legacy components that need updating to design system.
+
+```typescript
+// Step 1: List all components on page
+list_components({ depth: 10, maxNodes: 1000 })
+
+// Step 2: Inspect each to check source path
 get_component("1:0:0.2.1")
+// Check if source.fileName starts with "src/design-system/"
 
-# 5. Highlight component visually
+// Step 3: Identify legacy components
+// Legacy: src/components/OldButton.tsx
+// Design System: src/design-system/atoms/Button.tsx
+```
+
+**Future capability (v0.3.0 - See Issue #16):**
+
+```typescript
+analyze_design_system({
+  designSystemPath: "src/design-system",
+  currentPage: true
+})
+
+// Returns:
+{
+  compliance: 93%,
+  violations: [
+    { component: "OldButton", source: "SignupScreen.tsx:120" }
+  ]
+}
+```
+
+---
+
+### Workflow 5: Component Refactoring Safety Check
+
+**Scenario:** Before refactoring TextField component, find all usages.
+
+```typescript
+// Step 1: Navigate to each major page
+new_page("http://localhost:3000/signup")
+new_page("http://localhost:3000/dashboard")
+new_page("http://localhost:3000/settings")
+
+// Step 2: On each page, find TextField usages
+select_page(0)  // Signup page
+take_snapshot()
+// Find all textbox roles, inspect each
+// Document current props
+
+select_page(1)  // Dashboard
+// Repeat analysis
+
+// Step 3: Document prop patterns
+// All TextFields use: label, required, type, autoComplete
+// Safe to add new prop: helperText (optional)
+```
+
+**Result:**
+- ✅ Found all TextField instances
+- ✅ Documented current prop usage
+- ✅ Safe refactoring plan created
+
+---
+
+### Workflow 6: Accessibility Audit
+
+**Scenario:** Ensure all text inputs have proper labels.
+
+```typescript
+// Step 1: Get all interactive elements
+take_snapshot({
+  verbose: true,
+  filterInteractive: true  // Future: Issue #11
+})
+
+// Step 2: Find all textbox elements
+// Filter for role="textbox"
+
+// Step 3: Check each for label
+get_react_component_from_backend_node_id(nodeId)
+// Verify props.label or props['aria-label'] exists
+
+// Step 4: Generate report of unlabeled inputs
+```
+
+**Common findings:**
+- Missing labels on password fields
+- Missing aria-labels on search inputs
+- Incorrect autocomplete attributes
+
+---
+
+### Workflow 7: Managing Browser Pages
+
+**Scenario:** Test flows across multiple tabs.
+
+```typescript
+// List current pages
+list_pages()
+// Returns: "0: http://localhost:3000 [selected]"
+
+// Open admin panel in new tab
+new_page("http://localhost:3001/admin")
+
+// Open docs in another tab
+new_page("http://localhost:3002/docs")
+
+// List all pages
+list_pages()
+// Returns:
+// 0: http://localhost:3000
+// 1: http://localhost:3001/admin [selected]
+// 2: http://localhost:3002/docs
+
+// Switch between pages
+select_page(0)  // Back to main app
+select_page(2)  // To docs
+
+// Close admin tab
+close_page(1)
+
+// Navigate current page
+navigate_page({ type: "back" })
+navigate_page({ type: "forward" })
+navigate_page({ type: "reload", ignoreCache: true })
+```
+
+---
+
+### Workflow 8: Inspecting React Component Tree
+
+**Scenario:** Understand the component hierarchy of a complex page.
+
+```typescript
+// Step 1: Ensure React DevTools backend is attached
+ensure_react_attached()
+// Returns: "React DevTools backend is installed. Renderers: react-dom v18.3.0"
+
+// Step 2: List React roots
+list_react_roots()
+// Returns: "renderer=1(react-dom) root=1:0 idx=0 name=App nodes=156"
+
+// Step 3: Browse component tree (starting from root)
+list_components({ depth: 3, maxNodes: 50 })
+// Returns component IDs like: "1:0:0.2.1"
+
+// Step 4: Get detailed info for specific component
+get_component("1:0:0.2.1")
+// Returns full component details with props, state, source
+
+// Step 5: Visually highlight component in browser
 highlight_component("1:0:0.2.1")
+// Component lights up with overlay in browser
+```
+
+**Component ID format:** `{rendererId}:{rootIndex}:{path}`
+- rendererId: 1 (react-dom)
+- rootIndex: 0 (first root)
+- path: 0.2.1 (1st child → 3rd child → 2nd child)
+
+---
+
+## Pro Tips
+
+### Reducing Token Usage
+
+Snapshots can be large. Optimize by:
+
+```typescript
+// Instead of verbose snapshot (15k tokens):
+take_snapshot({ verbose: true })
+
+// Use compact snapshot (2k tokens):
+take_snapshot({ verbose: false })
+// Only includes interactive/interesting elements
+
+// Future: Smart filtering (Issue #11)
+take_snapshot({
+  verbose: true,
+  filterInteractive: true,
+  maxDepth: 3
+})
+```
+
+### Handling Stale backendDOMNodeIds
+
+BackendDOMNodeIds become stale when:
+1. Page navigates or reloads
+2. DOM updates significantly
+3. Different browser session
+
+**Solution:** Always use snapshot + component lookup in same MCP session.
+
+**Wrong (stale IDs):**
+```typescript
+// Session 1
+take_snapshot()  // Returns nodeId: 48
+
+// Session 2 (new browser instance)
+get_react_component_from_backend_node_id(48)  // ❌ Error: stale ID
+```
+
+**Correct (same session):**
+```typescript
+// Single session
+take_snapshot()  // Returns nodeId: 48
+get_react_component_from_backend_node_id(48)  // ✅ Works
+```
+
+### Finding Components by Test IDs
+
+If your components have `data-testid`:
+
+```typescript
+// Future: Issue #9
+get_react_component({ dataTestId: "submit-button" })
+```
+
+**Current workaround:**
+```typescript
+// Use CSS selector in snapshot search
+// Find element with data-testid="submit-button"
+// Then use its backendDOMNodeId
 ```
 
 ## Manual Installation
@@ -427,11 +731,29 @@ react-context-mcp --viewport 1920x1080
 
 ## Source Location Tracking
 
-For accurate source locations, your React app needs `data-inspector-*` attributes from Babel:
+> **⚠️ IMPORTANT:** To get accurate component source locations (file name, line number), you **must** configure the Babel plugin in your React project.
 
-### Vite
+### Why Is This Required?
+
+React Context MCP extracts source locations from `data-inspector-*` DOM attributes added by Babel. **React 19 removed the `_debugSource` fiber property**, making the Babel plugin approach the only reliable method for source tracking across all React versions.
+
+**Without the plugin configured:**
+- ❌ Component source locations will show as `undefined`
+- ❌ You'll only see component names and props (still useful!)
+- ✅ All other features work normally
+
+**With the plugin configured:**
+- ✅ Exact file paths (e.g., `src/components/Button.tsx`)
+- ✅ Precise line and column numbers
+- ✅ Complete component hierarchy with sources
+
+### Configuration
+
+#### Vite
+
+Add to `vite.config.ts`:
+
 ```typescript
-// vite.config.ts
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -446,10 +768,16 @@ export default defineConfig({
 })
 ```
 
-### Next.js / Create React App
-Automatically included in development mode. No configuration needed.
+#### Next.js / Create React App
 
-### Manual Babel
+✅ **Automatically included in development mode.** No configuration needed!
+
+The plugin is built into Next.js and CRA's development builds.
+
+#### Manual Babel Configuration
+
+Add to `.babelrc` or `babel.config.js`:
+
 ```json
 {
   "env": {
@@ -460,7 +788,35 @@ Automatically included in development mode. No configuration needed.
 }
 ```
 
-**Note:** Source tracking only works in development builds.
+### React 19 Compatibility
+
+✅ **Fully compatible with React 19**
+
+React 19 removed `_debugSource` and `_debugOwner` from fiber objects for performance. React Context MCP uses `data-inspector-*` DOM attributes instead, which is:
+- More reliable across React versions
+- Future-proof (won't break with React updates)
+- Recommended by the React team for tooling
+
+### Development vs Production
+
+| Build Type | Source Locations | Component Inspection |
+|------------|------------------|---------------------|
+| Development (with Babel plugin) | ✅ Full source info | ✅ Yes |
+| Development (without plugin) | ❌ No sources | ✅ Yes |
+| Production | ❌ No sources | ✅ Yes (but minified names) |
+
+**Note:** Source tracking intentionally only works in development builds for performance and security.
+
+### Troubleshooting
+
+**"Source location is undefined"**
+- Check that the Babel plugin is configured
+- Verify you're running a development build
+- Restart your dev server after config changes
+
+**"Seeing minified component names"**
+- You're connected to a production build
+- Use a development build for readable names and sources
 
 ## Architecture
 
