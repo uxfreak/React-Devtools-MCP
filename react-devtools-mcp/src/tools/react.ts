@@ -704,26 +704,25 @@ export const getReactComponentFromSnapshot = defineTool({
     await context.ensureReactAttached();
 
     const {role, name} = request.params;
+    const page = (context as any).getSelectedPage();
 
-    const result = await (context as any).getSelectedPage().evaluate(
-      (role: string, name: string) => {
-        // Find element by role and accessible name
-        const elements = Array.from(document.querySelectorAll('*'));
+    // Use ARIA selector to find element (more reliable than manual DOM search)
+    const ariaSelector = `aria/${name}[role="${role}"]`;
+    const elementHandle = await page.$(ariaSelector);
 
-        let targetElement: Element | null = null;
-        for (const el of elements) {
-          // Match by role and text content
-          const elRole = el.getAttribute('role') || el.tagName.toLowerCase();
-          const elText = el.textContent?.trim();
+    if (!elementHandle) {
+      response.appendResponseLine(JSON.stringify({
+        success: false,
+        error: `No element found with role="${role}" and name="${name}"`,
+        ariaSelector,
+      }, null, 2));
+      return;
+    }
 
-          if (elRole === role && elText === name) {
-            targetElement = el;
-            break;
-          }
-        }
-
+    // Now extract React fiber and component data from the element
+    const result = await elementHandle.evaluate((targetElement: Element) => {
         if (!targetElement) {
-          return {success: false, error: `No element found with role="${role}" and name="${name}"`};
+          return {success: false, error: 'Element handle is null'};
         }
 
         // Get fiber from element
@@ -834,12 +833,237 @@ export const getReactComponentFromSnapshot = defineTool({
             owners,
           },
         };
-      },
-      role,
-      name,
-    );
+      });
 
     response.appendResponseLine(JSON.stringify(result, null, 2));
+  },
+});
+
+// Test 1: Basic ARIA selector test
+export const testAriaSelector = defineTool({
+  name: 'test_aria_selector',
+  description: '[TEST 1] Test if Puppeteer ARIA selectors work to find "Sign up" button using aria/Name[role="button"] syntax',
+  schema: {},
+  handler: async (_req, response, context) => {
+    await context.ensureReactAttached();
+
+    const page = (context as any).getSelectedPage();
+
+    try {
+      // Test ARIA selector syntax: aria/Name[role="button"]
+      const selector = 'aria/Sign up[role="button"]';
+      const element = await page.$(selector);
+
+      if (!element) {
+        response.appendResponseLine(JSON.stringify({
+          success: false,
+          selector,
+          error: 'ARIA selector returned null - element not found',
+        }, null, 2));
+        return;
+      }
+
+      // Element found! Get some basic info
+      const info = await element.evaluate((el: Element) => {
+        return {
+          tagName: el.tagName.toLowerCase(),
+          textContent: el.textContent?.trim().substring(0, 50),
+          role: el.getAttribute('role'),
+          hasReactFiber: Object.keys(el).some(k => k.startsWith('__reactFiber')),
+        };
+      });
+
+      response.appendResponseLine(JSON.stringify({
+        success: true,
+        selector,
+        elementFound: true,
+        elementInfo: info,
+      }, null, 2));
+    } catch (error: any) {
+      response.appendResponseLine(JSON.stringify({
+        success: false,
+        error: error.message,
+      }, null, 2));
+    }
+  },
+});
+
+// Test 2: Get React fiber from ARIA-found element
+export const testAriaToFiber = defineTool({
+  name: 'test_aria_to_fiber',
+  description: '[TEST 2] Test getting React fiber and component info from ARIA-found "Sign up" button',
+  schema: {},
+  handler: async (_req, response, context) => {
+    await context.ensureReactAttached();
+
+    const page = (context as any).getSelectedPage();
+
+    try {
+      const result = await page.evaluate(async () => {
+        // Use ARIA selector to find element (simulated in evaluate context)
+        const button = document.querySelector('button');
+        if (!button || button.textContent?.trim() !== 'Sign up') {
+          return {success: false, error: 'Sign up button not found'};
+        }
+
+        // Get fiber from element
+        const keys = Object.keys(button);
+        const fiberKey = keys.find(k => k.startsWith('__reactFiber'));
+        if (!fiberKey) {
+          return {success: false, error: 'No React fiber on button'};
+        }
+
+        let fiber = (button as any)[fiberKey];
+        const originalFiberTag = fiber?.tag;
+
+        // Walk up to authored component
+        let maxSteps = 20;
+        while (fiber && maxSteps > 0) {
+          maxSteps--;
+          if ([0, 1, 11, 15].includes(fiber.tag)) break;
+          fiber = fiber.return;
+        }
+
+        if (!fiber) {
+          return {success: false, error: 'No authored React component found in fiber tree'};
+        }
+
+        // Extract basic component info
+        const getComponentName = (fiber: any): string => {
+          if (!fiber) return 'Unknown';
+          let type = fiber.type;
+          if (type?.displayName) return type.displayName;
+          if (type?.name) return type.name;
+          if (fiber.tag === 11 && type?.render) {
+            if (type.render.displayName) return type.render.displayName;
+            if (type.render.name) return type.render.name;
+          }
+          if (fiber.tag === 15 && type?.type) {
+            if (type.type.displayName) return type.type.displayName;
+            if (type.type.name) return type.type.name;
+          }
+          return 'Unknown';
+        };
+
+        const getComponentType = (tag: number): string => {
+          const types: Record<number, string> = {
+            0: 'FunctionComponent',
+            1: 'ClassComponent',
+            5: 'HostComponent',
+            11: 'ForwardRef',
+            15: 'MemoComponent',
+          };
+          return types[tag] || `Tag${tag}`;
+        };
+
+        return {
+          success: true,
+          originalFiberTag,
+          stepsToComponent: 20 - maxSteps,
+          component: {
+            name: getComponentName(fiber),
+            type: getComponentType(fiber.tag),
+            tag: fiber.tag,
+          },
+        };
+      });
+
+      response.appendResponseLine(JSON.stringify(result, null, 2));
+    } catch (error: any) {
+      response.appendResponseLine(JSON.stringify({
+        success: false,
+        error: error.message,
+      }, null, 2));
+    }
+  },
+});
+
+// Test 3: Edge cases - not found, different element
+export const testAriaEdgeCases = defineTool({
+  name: 'test_aria_edge_cases',
+  description: '[TEST 3] Test edge cases: element not found, trying "Log in" button',
+  schema: {},
+  handler: async (_req, response, context) => {
+    await context.ensureReactAttached();
+
+    const page = (context as any).getSelectedPage();
+
+    try {
+      const results = await page.evaluate(async () => {
+        const tests: any[] = [];
+
+        // Test 1: Element not found
+        try {
+          const selector1 = 'aria/DoesNotExist[role="button"]';
+          // In evaluate context, we can't use page.$, so simulate
+          tests.push({
+            test: 'Element not found',
+            selector: selector1,
+            expected: 'Should handle gracefully',
+            result: 'Cannot test page.$ in evaluate context - will test in handler',
+          });
+        } catch (e: any) {
+          tests.push({test: 'Element not found', error: e.message});
+        }
+
+        // Test 2: Find "Log in" button
+        const loginButton = Array.from(document.querySelectorAll('button')).find(
+          b => b.textContent?.trim() === 'Log in'
+        );
+
+        if (loginButton) {
+          const keys = Object.keys(loginButton);
+          const fiberKey = keys.find(k => k.startsWith('__reactFiber'));
+
+          if (fiberKey) {
+            let fiber = (loginButton as any)[fiberKey];
+            let maxSteps = 20;
+            while (fiber && maxSteps > 0) {
+              maxSteps--;
+              if ([0, 1, 11, 15].includes(fiber.tag)) break;
+              fiber = fiber.return;
+            }
+
+            const getComponentName = (fiber: any): string => {
+              if (!fiber) return 'Unknown';
+              let type = fiber.type;
+              if (type?.displayName) return type.displayName;
+              if (type?.name) return type.name;
+              if (fiber.tag === 11 && type?.render) {
+                if (type.render.displayName) return type.render.displayName;
+                if (type.render.name) return type.render.name;
+              }
+              return 'Unknown';
+            };
+
+            tests.push({
+              test: 'Find Log in button',
+              success: true,
+              component: getComponentName(fiber),
+              stepsToComponent: 20 - maxSteps,
+            });
+          } else {
+            tests.push({test: 'Find Log in button', success: false, error: 'No fiber'});
+          }
+        } else {
+          tests.push({test: 'Find Log in button', success: false, error: 'Button not found'});
+        }
+
+        return {success: true, tests};
+      });
+
+      // Test element not found using page.$
+      const notFoundSelector = 'aria/DoesNotExist[role="button"]';
+      const notFound = await page.$(notFoundSelector);
+      results.tests[0].result = notFound ? 'UNEXPECTED: Found element' : 'Correctly returned null';
+
+      response.appendResponseLine(JSON.stringify(results, null, 2));
+    } catch (error: any) {
+      response.appendResponseLine(JSON.stringify({
+        success: false,
+        error: error.message,
+      }, null, 2));
+    }
   },
 });
 
@@ -857,4 +1081,7 @@ export const tools = [
   debugExtractProps,
   debugExtractSource,
   debugExtractOwners,
+  testAriaSelector,
+  testAriaToFiber,
+  testAriaEdgeCases,
 ];

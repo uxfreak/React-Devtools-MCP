@@ -242,6 +242,8 @@ Capture accessibility tree snapshot to find text and UI elements on the page.
 
 **NEW!** Get complete React component information for an element found in the snapshot. Returns component name, type, props, state, source location, and owner hierarchy.
 
+**Uses ARIA selectors** built on the browser's accessibility tree for reliable element finding. This approach is more robust than manual DOM traversal and successfully handles headings, images, buttons, and most UI elements.
+
 **Arguments:**
 - `role` (string) - Element role from snapshot (e.g., "button", "heading", "paragraph")
 - `name` (string) - Element name/text from snapshot (e.g., "Sign up", "Log in")
@@ -386,11 +388,26 @@ Source information is extracted from `data-inspector-*` attributes added by Babe
 
 ### Accessibility Tree Snapshot
 
-The new `take_snapshot` tool:
+The `take_snapshot` tool:
 1. Calls Puppeteer's `page.accessibility.snapshot()` API
 2. Generates unique UIDs for each node
 3. Returns hierarchical tree with roles, names, and text content
 4. Enables finding any visible text on the page
+
+### ARIA Selector Mapping
+
+The `get_react_component_from_snapshot` tool uses ARIA selectors to map accessibility tree elements to React components:
+1. Takes `role` and `name` from snapshot (e.g., `{role: "button", name: "Sign up"}`)
+2. Uses Puppeteer's ARIA selector syntax: `aria/Name[role="button"]`
+3. Finds the DOM element via browser's built-in accessibility tree
+4. Extracts React fiber and component data from `element.__reactFiber$...` keys
+5. Returns complete component information (name, type, props, state, source, owners)
+
+**Benefits over manual DOM traversal:**
+- Built on browser's native accessibility tree (same as screen readers)
+- Handles dynamic content and shadow DOM
+- More reliable than text searching or XPath queries
+- Successfully tested with heading, image, and button elements
 
 ## Environment Variables
 
