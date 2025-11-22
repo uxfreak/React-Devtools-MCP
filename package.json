@@ -1,10 +1,10 @@
 {
-  "name": "react-devtools-mcp",
+  "name": "react-context-mcp",
   "version": "0.1.0",
   "description": "MCP server for React DevTools - inspect React applications via Model Context Protocol",
   "type": "module",
   "bin": {
-    "react-devtools-mcp": "build/src/main.js"
+    "react-context-mcp": "build/src/main.js"
   },
   "main": "./build/src/main.js",
   "scripts": {
