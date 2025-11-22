@@ -19,11 +19,22 @@ React DevTools MCP (Model Context Protocol) server for inspecting React applicat
   - Returns array from closest to farthest component
   - Test results: 18 components from Button → OnboardingScreen → App
 
-### 🔄 In Progress
 - **Issue #2**: Create production tool `getReactComponentFromBackendNodeId`
+  - Created CDP-based production tool accepting backendDOMNodeId
+  - Returns full component metadata (name, type, props, state, source, owners)
+  - Matches output format of ARIA-based tool
+  - Uses DOM.resolveNode + Runtime.callFunctionOn
+
+- **Issue #3**: Integrate backendDOMNodeId into takeSnapshot workflow
+  - Replaced Puppeteer accessibility API with CDP Accessibility.getFullAXTree
+  - Added backendDOMNodeId to every element in snapshot
+  - Rebuilt hierarchy from flat CDP node array
+  - **Status**: Implementation complete, testing blocked on dev server
+
+### 🔄 In Progress
+- Testing Issue #3 (need dev server at localhost:5174)
 
 ### 📋 Pending
-- Issue #3: Integrate backendDOMNodeId into takeSnapshot workflow
 - Issue #4: Add integration test comparing CDP vs ARIA approaches
 - Issue #5: Handle edge cases and error scenarios
 - Issue #6: Documentation for CDP vs ARIA approaches
@@ -140,5 +151,9 @@ All test files are in `/tmp/` directory:
 4. Check which issues are open/closed
 5. Continue from where left off
 
+## Dev Server Location
+Dev server runs from: `/Users/kasa/faux-projects/banking-template`
+URL: `http://localhost:5174`
+
 ## Last Updated
-2025-11-22 - After completing Issue #1 (fiber tree navigation)
+2025-11-22 - After completing Issues #1, #2, #3 (implementation done, testing pending)
