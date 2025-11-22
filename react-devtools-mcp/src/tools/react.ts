@@ -145,9 +145,9 @@ export const highlightComponent = defineTool({
 export const takeSnapshot = defineTool({
   name: 'take_snapshot',
   description:
-    'Take an accessibility tree snapshot of the current page. Returns a hierarchical tree with roles, names, and UIDs for finding text and UI elements.',
+    'Take an accessibility tree snapshot of the current page. Returns a hierarchical tree with accessible roles, names, and DOM node IDs (backendDOMNodeId) for each element. Use this to discover UI elements and get their IDs for component inspection.',
   schema: {
-    verbose: zod.boolean().optional().describe('Include all elements (true) or only interesting ones (false, default)'),
+    verbose: zod.boolean().optional().describe('Include all elements (true) or only interesting/interactive elements (false, default)'),
   },
   handler: async (request, response, context) => {
     const snapshot = await context.takeSnapshot(request.params.verbose ?? false);
@@ -692,13 +692,12 @@ export const debugExtractOwners = defineTool({
   },
 });
 
-// Production tool: Get React component info from snapshot element
 export const getReactComponentFromSnapshot = defineTool({
   name: 'get_react_component_from_snapshot',
-  description: 'Get React component info for an element from take_snapshot. Pass role and name from snapshot to find the element and extract React data (name, type, props, source, owners).',
+  description: 'Get React component information for a UI element using its accessible role and name from a snapshot. Returns component name, type, props, state, source location, and owner component chain.',
   schema: {
-    role: zod.string().describe('Role from snapshot (e.g., "button", "heading")'),
-    name: zod.string().describe('Name from snapshot (e.g., "Sign up", "Log in")'),
+    role: zod.string().describe('Accessible role from snapshot (e.g., "button", "heading", "link")'),
+    name: zod.string().describe('Accessible name from snapshot (e.g., "Submit", "Welcome")'),
   },
   handler: async (request, response, context) => {
     await context.ensureReactAttached();
@@ -839,12 +838,11 @@ export const getReactComponentFromSnapshot = defineTool({
   },
 });
 
-// Production tool: Get React component info from backendDOMNodeId (CDP approach)
 export const getReactComponentFromBackendNodeId = defineTool({
   name: 'get_react_component_from_backend_node_id',
-  description: 'Get React component info for an element using CDP backendDOMNodeId. Faster and more deterministic than ARIA selectors. Use backendDOMNodeId from take_snapshot.',
+  description: 'Get React component information for a UI element using its Chrome DevTools Protocol node ID. Faster and more deterministic than accessible name lookup. Returns component name, type, props, state, source location, and owner chain. Use backendDOMNodeId from take_snapshot.',
   schema: {
-    backendDOMNodeId: zod.number().describe('Backend DOM node ID from CDP Accessibility tree (from take_snapshot)'),
+    backendDOMNodeId: zod.number().describe('Backend DOM node ID from the accessibility tree snapshot'),
   },
   handler: async (request, response, context) => {
     await context.ensureReactAttached();
@@ -1588,6 +1586,7 @@ export const testCdpExtractFiber = defineTool({
   },
 });
 
+// Production tools only - debug and test tools excluded
 export const tools = [
   ensureReactAttached,
   listReactRoots,
@@ -1597,17 +1596,4 @@ export const tools = [
   takeSnapshot,
   getReactComponentFromSnapshot,
   getReactComponentFromBackendNodeId,
-  debugFiberKeys,
-  debugFiberWalk,
-  debugExtractMetadata,
-  debugExtractProps,
-  debugExtractSource,
-  debugExtractOwners,
-  testAriaSelector,
-  testAriaToFiber,
-  testAriaEdgeCases,
-  testCdpBackendNodeId,
-  testCdpResolveNode,
-  testCdpCombined,
-  testCdpExtractFiber,
 ];
