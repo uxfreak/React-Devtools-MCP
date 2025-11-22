@@ -184,6 +184,255 @@ Accessibility Tree (from snapshot)          React Fiber Tree (internal)
 
 ---
 
+---
+
+## Requirements
+
+- [Node.js](https://nodejs.org/) v20.19+ or v22.12+ or v23+
+- [Chrome](https://www.google.com/chrome/) current stable version
+- [npm](https://www.npmjs.com/)
+- React application with development build (for source location tracking)
+
+## Getting Started
+
+### Quick Install
+
+Add to your MCP client configuration:
+
+```json
+{
+  "mcpServers": {
+    "react-context": {
+      "command": "npx",
+      "args": ["-y", "react-context-mcp@latest"]
+    }
+  }
+}
+```
+
+> [!NOTE]
+> Using `@latest` ensures you always get the most recent version.
+
+### MCP Client Setup
+
+<details>
+  <summary><b>Claude Code</b></summary>
+
+Use the Claude Code CLI:
+
+```bash
+claude mcp add react-context npx react-context-mcp@latest
+```
+
+</details>
+
+<details>
+  <summary><b>Cursor</b></summary>
+
+Go to `Cursor Settings` → `MCP` → `New MCP Server`, then add:
+
+```json
+{
+  "mcpServers": {
+    "react-context": {
+      "command": "npx",
+      "args": ["-y", "react-context-mcp@latest"]
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+  <summary><b>Cline / Windsurf / Other Clients</b></summary>
+
+Add the configuration above to your MCP settings file. Refer to your client's documentation for the config file location.
+
+</details>
+
+### Connecting to Existing Browser
+
+To connect to a Chrome instance with remote debugging enabled:
+
+```bash
+# Start Chrome with remote debugging
+chrome --remote-debugging-port=9222
+
+# Add to MCP config with browserUrl
+claude mcp add react-context npx react-context-mcp@latest --browserUrl http://localhost:9222
+```
+
+### First Prompt
+
+Try this in your MCP client:
+
+```
+Navigate to http://localhost:3000 and find the "Sign up" button.
+Show me the React component and its source file.
+```
+
+Your AI assistant will open the browser, take a snapshot, find the button, and show you the complete component information with source location.
+
+## Source Location Tracking
+
+> **⚠️ IMPORTANT:** To get accurate component source locations (file name, line number), you **must** configure the Babel plugin in your React project.
+
+### Why Is This Required?
+
+React Context MCP extracts source locations from `data-inspector-*` DOM attributes added by Babel. **React 19 removed the `_debugSource` fiber property**, making the Babel plugin approach the only reliable method for source tracking across all React versions.
+
+**Without the plugin configured:**
+- ❌ Component source locations will show as `undefined`
+- ❌ You'll only see component names and props (still useful!)
+- ✅ All other features work normally
+
+**With the plugin configured:**
+- ✅ Exact file paths (e.g., `src/components/Button.tsx`)
+- ✅ Precise line and column numbers
+- ✅ Complete component hierarchy with sources
+
+### Configuration
+
+#### Vite
+
+Add to `vite.config.ts`:
+
+```bash
+npm install --save-dev @react-dev-inspector/babel-plugin
+```
+
+```typescript
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [
+    react({
+      babel: {
+        plugins: [
+          ['@react-dev-inspector/babel-plugin', {
+            excludes: ['node_modules']
+          }]
+        ]
+      }
+    })
+  ]
+})
+```
+
+#### Next.js
+
+Install the plugin and add to `next.config.js`:
+
+```bash
+npm install --save-dev @react-dev-inspector/babel-plugin
+```
+
+```javascript
+module.exports = {
+  // ... other config
+  compiler: {
+    // Note: This only works for Next.js <13 with SWC disabled
+    // For Next.js 13+ with SWC, you may need additional configuration
+  },
+  webpack: (config) => {
+    // Add babel-loader rule for the plugin
+    config.module.rules.push({
+      test: /\.(tsx|ts|jsx|js)$/,
+      exclude: /node_modules/,
+      use: {
+        loader: 'babel-loader',
+        options: {
+          plugins: [
+            ['@react-dev-inspector/babel-plugin', {
+              excludes: ['node_modules']
+            }]
+          ]
+        }
+      }
+    })
+    return config
+  }
+}
+```
+
+#### Create React App
+
+Install and configure in `.babelrc` or `babel.config.js`:
+
+```bash
+npm install --save-dev @react-dev-inspector/babel-plugin
+```
+
+Create `babel.config.js`:
+
+```javascript
+module.exports = {
+  presets: ['react-app'],
+  plugins: [
+    process.env.NODE_ENV !== 'production' && [
+      '@react-dev-inspector/babel-plugin',
+      { excludes: ['node_modules'] }
+    ]
+  ].filter(Boolean)
+}
+```
+
+#### Manual Babel Configuration
+
+```bash
+npm install --save-dev @react-dev-inspector/babel-plugin
+```
+
+Add to `.babelrc` or `babel.config.js`:
+
+```javascript
+{
+  "env": {
+    "development": {
+      "plugins": [
+        ["@react-dev-inspector/babel-plugin", {
+          "excludes": ["node_modules"]
+        }]
+      ]
+    }
+  }
+}
+```
+
+### React 19 Compatibility
+
+✅ **Fully compatible with React 19**
+
+React 19 removed `_debugSource` and `_debugOwner` from fiber objects for performance. React Context MCP uses `data-inspector-*` DOM attributes instead, which is:
+- More reliable across React versions
+- Future-proof (won't break with React updates)
+- Recommended by the React team for tooling
+
+### Development vs Production
+
+| Build Type | Source Locations | Component Inspection |
+|------------|------------------|---------------------|
+| Development (with Babel plugin) | ✅ Full source info | ✅ Yes |
+| Development (without plugin) | ❌ No sources | ✅ Yes |
+| Production | ❌ No sources | ✅ Yes (but minified names) |
+
+**Note:** Source tracking intentionally only works in development builds for performance and security.
+
+### Troubleshooting
+
+**"Source location is undefined"**
+- Check that the Babel plugin is configured
+- Verify you're running a development build
+- Restart your dev server after config changes
+
+**"Seeing minified component names"**
+- You're connected to a production build
+- Use a development build for readable names and sources
+
+---
+
 ## Real-World Use Cases (From Actual Usage)
 
 ### Use Case 1: Design System Compliance Audit
@@ -423,94 +672,6 @@ Recommendations:
 
 ---
 
-## Requirements
-
-- [Node.js](https://nodejs.org/) v20.19+ or v22.12+ or v23+
-- [Chrome](https://www.google.com/chrome/) current stable version
-- [npm](https://www.npmjs.com/)
-- React application with development build (for source location tracking)
-
-## Getting Started
-
-### Quick Install
-
-Add to your MCP client configuration:
-
-```json
-{
-  "mcpServers": {
-    "react-context": {
-      "command": "npx",
-      "args": ["-y", "react-context-mcp@latest"]
-    }
-  }
-}
-```
-
-> [!NOTE]
-> Using `@latest` ensures you always get the most recent version.
-
-### MCP Client Setup
-
-<details>
-  <summary><b>Claude Code</b></summary>
-
-Use the Claude Code CLI:
-
-```bash
-claude mcp add react-context npx react-context-mcp@latest
-```
-
-</details>
-
-<details>
-  <summary><b>Cursor</b></summary>
-
-Go to `Cursor Settings` → `MCP` → `New MCP Server`, then add:
-
-```json
-{
-  "mcpServers": {
-    "react-context": {
-      "command": "npx",
-      "args": ["-y", "react-context-mcp@latest"]
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-  <summary><b>Cline / Windsurf / Other Clients</b></summary>
-
-Add the configuration above to your MCP settings file. Refer to your client's documentation for the config file location.
-
-</details>
-
-### Connecting to Existing Browser
-
-To connect to a Chrome instance with remote debugging enabled:
-
-```bash
-# Start Chrome with remote debugging
-chrome --remote-debugging-port=9222
-
-# Add to MCP config with browserUrl
-claude mcp add react-context npx react-context-mcp@latest --browserUrl http://localhost:9222
-```
-
-### First Prompt
-
-Try this in your MCP client:
-
-```
-Navigate to http://localhost:3000 and find the "Sign up" button.
-Show me the React component and its source file.
-```
-
-Your AI assistant will open the browser, take a snapshot, find the button, and show you the complete component information with source location.
-
 ## MCP Tools
 
 ### Page Management Tools
@@ -716,392 +877,6 @@ Capture accessibility tree snapshot with backendDOMNodeId for every element.
 {"name": "get_react_component_from_snapshot", "arguments": {"role": "button", "name": "Sign up"}}
 ```
 
-## Common Workflows
-
-### Workflow 1: Finding Component from UI Text
-
-**Scenario:** Find the "Sign up" button and trace it to its React component and source file.
-
-**Method 1: CDP backendDOMNodeId (Recommended)**
-
-Fastest and most reliable - uses direct DOM node ID:
-
-```typescript
-// Step 1: Take snapshot (includes backendDOMNodeId for every element)
-take_snapshot({ verbose: false })
-
-// Step 2: Find your element in the snapshot JSON:
-{
-  "role": "button",
-  "name": "Sign up",
-  "backendDOMNodeId": 48  // ← Use this
-}
-
-// Step 3: Get complete component information
-get_react_component_from_backend_node_id(48)
-```
-
-**Result:**
-```json
-{
-  "success": true,
-  "component": {
-    "name": "Button",
-    "type": "ForwardRef",
-    "source": {
-      "fileName": "src/design-system/atoms/Button/Button.tsx",
-      "lineNumber": 42,
-      "columnNumber": 8
-    },
-    "props": {
-      "variant": "primary",
-      "size": "large",
-      "children": "Sign up"
-    },
-    "owners": [
-      { "name": "OnboardingScreen", "source": "..." },
-      { "name": "App", "source": "..." }
-    ]
-  }
-}
-```
-
-**Method 2: ARIA Selector (Cross-Session)**
-
-Works across different browser sessions:
-
-```typescript
-get_react_component_from_snapshot({
-  role: "button",
-  name: "Sign up"
-})
-```
-
-**When to use each:**
-- **CDP method:** Same browser session, faster, more deterministic
-- **ARIA method:** Cross-session, automated testing, stale-resistant
-
----
-
-### Workflow 2: Analyzing All Buttons on a Page
-
-**Scenario:** Audit all buttons for design system compliance.
-
-**Current approach (v0.1.0):**
-
-```typescript
-// Step 1: Get snapshot
-take_snapshot({ verbose: true })
-
-// Step 2: Manually find all button backendDOMNodeIds
-// NodeIds: 48, 52, 67, 89, 102...
-
-// Step 3: Inspect each individually
-get_react_component_from_backend_node_id(48)
-get_react_component_from_backend_node_id(52)
-// ... repeat for all buttons
-```
-
-**Future approach (v0.2.0 - See Issue #10):**
-
-```typescript
-// Single call to get all buttons
-get_react_components({
-  componentName: "Button",
-  includeProps: true
-})
-
-// Returns array of all Button components with props
-// Can then filter by variant, source, etc.
-```
-
-**Use cases:**
-- ✅ Design system compliance checking
-- ✅ Finding deprecated prop usage
-- ✅ Component usage auditing
-- ✅ Generating component inventories
-
----
-
-### Workflow 3: Multi-Page Navigation & Analysis
-
-**Scenario:** Analyze a 6-screen signup flow for consistent TextField usage.
-
-```typescript
-// Page 1: Email screen
-new_page("http://localhost:3000/signup/email")
-take_snapshot()
-get_react_component_from_backend_node_id(...)  // Email TextField
-
-// Page 2: Personal info
-navigate_page({ type: "url", url: "/signup/personal-info" })
-take_snapshot()
-// Inspect first name, last name TextFields
-
-// Page 3: Password
-navigate_page({ type: "url", url: "/signup/password" })
-// Continue analysis...
-
-// List all pages
-list_pages()
-// Shows: 0: /email [selected], 1: /personal-info, 2: /password
-
-// Switch back to previous page
-select_page(1)
-```
-
-**Real-world use case:**
-- User analyzed 30+ components across 6 screens
-- Found inconsistent TextField props
-- Generated compliance report
-
----
-
-### Workflow 4: Design System Migration
-
-**Scenario:** Find all legacy components that need updating to design system.
-
-```typescript
-// Step 1: List all components on page
-list_components({ depth: 10, maxNodes: 1000 })
-
-// Step 2: Inspect each to check source path
-get_component("1:0:0.2.1")
-// Check if source.fileName starts with "src/design-system/"
-
-// Step 3: Identify legacy components
-// Legacy: src/components/OldButton.tsx
-// Design System: src/design-system/atoms/Button.tsx
-```
-
-**Future capability (v0.3.0 - See Issue #16):**
-
-```typescript
-analyze_design_system({
-  designSystemPath: "src/design-system",
-  currentPage: true
-})
-
-// Returns:
-{
-  compliance: 93%,
-  violations: [
-    { component: "OldButton", source: "SignupScreen.tsx:120" }
-  ]
-}
-```
-
----
-
-### Workflow 5: Component Refactoring Safety Check
-
-**Scenario:** Before refactoring TextField component, find all usages.
-
-```typescript
-// Step 1: Navigate to each major page
-new_page("http://localhost:3000/signup")
-new_page("http://localhost:3000/dashboard")
-new_page("http://localhost:3000/settings")
-
-// Step 2: On each page, find TextField usages
-select_page(0)  // Signup page
-take_snapshot()
-// Find all textbox roles, inspect each
-// Document current props
-
-select_page(1)  // Dashboard
-// Repeat analysis
-
-// Step 3: Document prop patterns
-// All TextFields use: label, required, type, autoComplete
-// Safe to add new prop: helperText (optional)
-```
-
-**Result:**
-- ✅ Found all TextField instances
-- ✅ Documented current prop usage
-- ✅ Safe refactoring plan created
-
----
-
-### Workflow 6: Accessibility Audit
-
-**Scenario:** Ensure all text inputs have proper labels.
-
-```typescript
-// Step 1: Get all interactive elements
-take_snapshot({
-  verbose: true,
-  filterInteractive: true  // Future: Issue #11
-})
-
-// Step 2: Find all textbox elements
-// Filter for role="textbox"
-
-// Step 3: Check each for label
-get_react_component_from_backend_node_id(nodeId)
-// Verify props.label or props['aria-label'] exists
-
-// Step 4: Generate report of unlabeled inputs
-```
-
-**Common findings:**
-- Missing labels on password fields
-- Missing aria-labels on search inputs
-- Incorrect autocomplete attributes
-
----
-
-### Workflow 7: Managing Browser Pages
-
-**Scenario:** Test flows across multiple tabs.
-
-```typescript
-// List current pages
-list_pages()
-// Returns: "0: http://localhost:3000 [selected]"
-
-// Open admin panel in new tab
-new_page("http://localhost:3001/admin")
-
-// Open docs in another tab
-new_page("http://localhost:3002/docs")
-
-// List all pages
-list_pages()
-// Returns:
-// 0: http://localhost:3000
-// 1: http://localhost:3001/admin [selected]
-// 2: http://localhost:3002/docs
-
-// Switch between pages
-select_page(0)  // Back to main app
-select_page(2)  // To docs
-
-// Close admin tab
-close_page(1)
-
-// Navigate current page
-navigate_page({ type: "back" })
-navigate_page({ type: "forward" })
-navigate_page({ type: "reload", ignoreCache: true })
-```
-
----
-
-### Workflow 8: Inspecting React Component Tree
-
-**Scenario:** Understand the component hierarchy of a complex page.
-
-```typescript
-// Step 1: Ensure React DevTools backend is attached
-ensure_react_attached()
-// Returns: "React DevTools backend is installed. Renderers: react-dom v18.3.0"
-
-// Step 2: List React roots
-list_react_roots()
-// Returns: "renderer=1(react-dom) root=1:0 idx=0 name=App nodes=156"
-
-// Step 3: Browse component tree (starting from root)
-list_components({ depth: 3, maxNodes: 50 })
-// Returns component IDs like: "1:0:0.2.1"
-
-// Step 4: Get detailed info for specific component
-get_component("1:0:0.2.1")
-// Returns full component details with props, state, source
-
-// Step 5: Visually highlight component in browser
-highlight_component("1:0:0.2.1")
-// Component lights up with overlay in browser
-```
-
-**Component ID format:** `{rendererId}:{rootIndex}:{path}`
-- rendererId: 1 (react-dom)
-- rootIndex: 0 (first root)
-- path: 0.2.1 (1st child → 3rd child → 2nd child)
-
----
-
-## Pro Tips
-
-### Reducing Token Usage
-
-Snapshots can be large. Optimize by:
-
-```typescript
-// Instead of verbose snapshot (15k tokens):
-take_snapshot({ verbose: true })
-
-// Use compact snapshot (2k tokens):
-take_snapshot({ verbose: false })
-// Only includes interactive/interesting elements
-
-// Future: Smart filtering (Issue #11)
-take_snapshot({
-  verbose: true,
-  filterInteractive: true,
-  maxDepth: 3
-})
-```
-
-### Handling Stale backendDOMNodeIds
-
-BackendDOMNodeIds become stale when:
-1. Page navigates or reloads
-2. DOM updates significantly
-3. Different browser session
-
-**Solution:** Always use snapshot + component lookup in same MCP session.
-
-**Wrong (stale IDs):**
-```typescript
-// Session 1
-take_snapshot()  // Returns nodeId: 48
-
-// Session 2 (new browser instance)
-get_react_component_from_backend_node_id(48)  // ❌ Error: stale ID
-```
-
-**Correct (same session):**
-```typescript
-// Single session
-take_snapshot()  // Returns nodeId: 48
-get_react_component_from_backend_node_id(48)  // ✅ Works
-```
-
-### Finding Components by Test IDs
-
-If your components have `data-testid`:
-
-```typescript
-// Future: Issue #9
-get_react_component({ dataTestId: "submit-button" })
-```
-
-**Current workaround:**
-```typescript
-// Use CSS selector in snapshot search
-// Find element with data-testid="submit-button"
-// Then use its backendDOMNodeId
-```
-
-## Manual Installation
-
-For development or local installation:
-
-```bash
-git clone https://github.com/uxfreak/react-context-mcp.git
-cd react-context-mcp
-npm install
-npm run build
-
-# Link globally
-npm link
-
-# Now use in MCP config
-claude mcp add react-context react-context-mcp
-```
-
 ## Command-Line Options
 
 ```bash
@@ -1129,163 +904,6 @@ react-context-mcp --viewport 1920x1080
 - `--executablePath <path>` - Path to Chrome executable
 - `--channel <channel>` - Chrome channel (stable, canary, beta, dev)
 - `--viewport <WxH>` - Viewport size (e.g., 1280x720)
-
-## Source Location Tracking
-
-> **⚠️ IMPORTANT:** To get accurate component source locations (file name, line number), you **must** configure the Babel plugin in your React project.
-
-### Why Is This Required?
-
-React Context MCP extracts source locations from `data-inspector-*` DOM attributes added by Babel. **React 19 removed the `_debugSource` fiber property**, making the Babel plugin approach the only reliable method for source tracking across all React versions.
-
-**Without the plugin configured:**
-- ❌ Component source locations will show as `undefined`
-- ❌ You'll only see component names and props (still useful!)
-- ✅ All other features work normally
-
-**With the plugin configured:**
-- ✅ Exact file paths (e.g., `src/components/Button.tsx`)
-- ✅ Precise line and column numbers
-- ✅ Complete component hierarchy with sources
-
-### Configuration
-
-#### Vite
-
-Add to `vite.config.ts`:
-
-```bash
-npm install --save-dev @react-dev-inspector/babel-plugin
-```
-
-```typescript
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-
-export default defineConfig({
-  plugins: [
-    react({
-      babel: {
-        plugins: [
-          ['@react-dev-inspector/babel-plugin', {
-            excludes: ['node_modules']
-          }]
-        ]
-      }
-    })
-  ]
-})
-```
-
-#### Next.js
-
-Install the plugin and add to `next.config.js`:
-
-```bash
-npm install --save-dev @react-dev-inspector/babel-plugin
-```
-
-```javascript
-module.exports = {
-  // ... other config
-  compiler: {
-    // Note: This only works for Next.js <13 with SWC disabled
-    // For Next.js 13+ with SWC, you may need additional configuration
-  },
-  webpack: (config) => {
-    // Add babel-loader rule for the plugin
-    config.module.rules.push({
-      test: /\.(tsx|ts|jsx|js)$/,
-      exclude: /node_modules/,
-      use: {
-        loader: 'babel-loader',
-        options: {
-          plugins: [
-            ['@react-dev-inspector/babel-plugin', {
-              excludes: ['node_modules']
-            }]
-          ]
-        }
-      }
-    })
-    return config
-  }
-}
-```
-
-#### Create React App
-
-Install and configure in `.babelrc` or `babel.config.js`:
-
-```bash
-npm install --save-dev @react-dev-inspector/babel-plugin
-```
-
-Create `babel.config.js`:
-
-```javascript
-module.exports = {
-  presets: ['react-app'],
-  plugins: [
-    process.env.NODE_ENV !== 'production' && [
-      '@react-dev-inspector/babel-plugin',
-      { excludes: ['node_modules'] }
-    ]
-  ].filter(Boolean)
-}
-```
-
-#### Manual Babel Configuration
-
-```bash
-npm install --save-dev @react-dev-inspector/babel-plugin
-```
-
-Add to `.babelrc` or `babel.config.js`:
-
-```javascript
-{
-  "env": {
-    "development": {
-      "plugins": [
-        ["@react-dev-inspector/babel-plugin", {
-          "excludes": ["node_modules"]
-        }]
-      ]
-    }
-  }
-}
-```
-
-### React 19 Compatibility
-
-✅ **Fully compatible with React 19**
-
-React 19 removed `_debugSource` and `_debugOwner` from fiber objects for performance. React Context MCP uses `data-inspector-*` DOM attributes instead, which is:
-- More reliable across React versions
-- Future-proof (won't break with React updates)
-- Recommended by the React team for tooling
-
-### Development vs Production
-
-| Build Type | Source Locations | Component Inspection |
-|------------|------------------|---------------------|
-| Development (with Babel plugin) | ✅ Full source info | ✅ Yes |
-| Development (without plugin) | ❌ No sources | ✅ Yes |
-| Production | ❌ No sources | ✅ Yes (but minified names) |
-
-**Note:** Source tracking intentionally only works in development builds for performance and security.
-
-### Troubleshooting
-
-**"Source location is undefined"**
-- Check that the Babel plugin is configured
-- Verify you're running a development build
-- Restart your dev server after config changes
-
-**"Seeing minified component names"**
-- You're connected to a production build
-- Use a development build for readable names and sources
 
 ## Architecture
 
@@ -1326,6 +944,7 @@ React 19 removed `_debugSource` and `_debugOwner` from fiber objects for perform
 - ✅ Cross-session compatible
 - ✅ No staleness issues
 - ✅ Works with dynamic content
+
 
 ## Troubleshooting
 
