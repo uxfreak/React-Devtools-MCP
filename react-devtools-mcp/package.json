@@ -10,7 +10,8 @@
     "build": "tsc",
     "start": "npm run build && node build/src/main.js",
     "typecheck": "tsc --noEmit",
-    "prepare": "npm run build"
+    "prepare": "npm run build",
+    "test:example": "npm run build && npx tsx examples/integration-test.ts"
   },
   "files": [
     "build/src",
