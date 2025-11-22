@@ -1,74 +1,78 @@
-# React DevTools MCP Server
+# React Context MCP
 
-[![npm react-devtools-mcp package](https://img.shields.io/npm/v/react-devtools-mcp.svg)](https://npmjs.org/package/react-devtools-mcp)
+[![npm version](https://img.shields.io/npm/v/react-context-mcp.svg)](https://npmjs.org/package/react-context-mcp)
+[![License](https://img.shields.io/npm/l/react-context-mcp.svg)](https://github.com/uxfreak/react-context-mcp/blob/main/LICENSE)
 
-`react-devtools-mcp` lets your coding agent (such as Claude, Cursor, Copilot, or Gemini) inspect and debug React applications in a live Chrome browser. It acts as a Model Context Protocol (MCP) server, giving your AI coding assistant access to React component trees, props, state, and source locations for reliable debugging and development assistance.
+`react-context-mcp` lets your AI coding assistant (Claude, Cursor, Copilot, Gemini) inspect and debug React applications in a live Chrome browser. It acts as a Model Context Protocol (MCP) server, providing access to React component trees, props, state, source locations, and full browser control for reliable debugging and development assistance.
 
 ## Key Features
 
-- **React Component Tree Inspection** - List and inspect React fiber tree with props, state, and source locations
-- **Text-to-Component Mapping** - Find any visible text on the page and trace it back to the React component and source file
-- **Two Element-to-Component Mapping Methods**:
-  - **CDP backendDOMNodeId** (Recommended) - Fast, deterministic direct element access via Chrome DevTools Protocol
-  - **ARIA Selectors** (Legacy) - Cross-session compatible element searching via accessibility tree
-- **Accessibility Tree Snapshot** - Capture page structure with text content and CDP backendDOMNodeId for every element
-- **React Backend Injection** - Automatically injects React DevTools backend hook into pages
-- **Component Highlighting** - Visual highlighting of React components in the browser
+### React DevTools Integration
+- **Component Tree Inspection** - Browse React fiber tree with props, state, and source locations
+- **Text-to-Component Mapping** - Find any visible text and trace it to the React component and source file
+- **Two Element Mapping Methods**:
+  - **CDP backendDOMNodeId** (Recommended) - Fast, deterministic element access via Chrome DevTools Protocol
+  - **ARIA Selectors** (Legacy) - Cross-session element searching via accessibility tree
+- **Component Highlighting** - Visual highlighting of components in the browser
+- **Automatic Backend Injection** - React DevTools backend hook injected on page load
 
-## Disclaimers
-
-`react-devtools-mcp` exposes content of the browser instance to the MCP clients allowing them to inspect, debug, and modify any data in the browser or React DevTools. Avoid sharing sensitive or personal information that you don't want to share with MCP clients.
+### Browser Page Management
+- **Multi-page Support** - List, select, and switch between browser tabs
+- **Page Navigation** - Navigate to URLs, go back/forward, reload pages
+- **Page Control** - Create new pages, close tabs, manage browser sessions
+- **Accessibility Snapshots** - Capture page structure with text content and DOM node IDs
 
 ## Requirements
 
-- [Node.js](https://nodejs.org/) v20.19 or a newer [latest maintenance LTS](https://github.com/nodejs/Release#release-schedule) version
-- [Chrome](https://www.google.com/chrome/) current stable version or newer
+- [Node.js](https://nodejs.org/) v20.19+ or v22.12+ or v23+
+- [Chrome](https://www.google.com/chrome/) current stable version
 - [npm](https://www.npmjs.com/)
 - React application with development build (for source location tracking)
 
 ## Getting Started
 
-Add the following config to your MCP client:
+### Quick Install
+
+Add to your MCP client configuration:
 
 ```json
 {
   "mcpServers": {
-    "react-devtools": {
+    "react-context": {
       "command": "npx",
-      "args": ["-y", "react-devtools-mcp@latest"]
+      "args": ["-y", "react-context-mcp@latest"]
     }
   }
 }
 ```
 
 > [!NOTE]
-> Using `react-devtools-mcp@latest` ensures that your MCP client will always use the latest version of the React DevTools MCP server.
+> Using `@latest` ensures you always get the most recent version.
 
-### MCP Client Configuration
+### MCP Client Setup
 
 <details>
-  <summary>Claude Code</summary>
-  Use the Claude Code CLI to add the React DevTools MCP server:
+  <summary><b>Claude Code</b></summary>
+
+Use the Claude Code CLI:
 
 ```bash
-claude mcp add react-devtools npx react-devtools-mcp@latest
+claude mcp add react-context npx react-context-mcp@latest
 ```
 
 </details>
 
 <details>
-  <summary>Cursor</summary>
+  <summary><b>Cursor</b></summary>
 
-Go to `Cursor Settings` -> `MCP` -> `New MCP Server`. Use the config provided above.
-
-Or add manually to your MCP configuration file:
+Go to `Cursor Settings` → `MCP` → `New MCP Server`, then add:
 
 ```json
 {
   "mcpServers": {
-    "react-devtools": {
+    "react-context": {
       "command": "npx",
-      "args": ["-y", "react-devtools-mcp@latest"]
+      "args": ["-y", "react-context-mcp@latest"]
     }
   }
 }
@@ -77,87 +81,357 @@ Or add manually to your MCP configuration file:
 </details>
 
 <details>
-  <summary>Codex</summary>
-  Follow the <a href="https://github.com/openai/codex/blob/main/docs/advanced.md#model-context-protocol-mcp">configure MCP guide</a>
-  using the standard config from above. You can also install the React DevTools MCP server using the Codex CLI:
+  <summary><b>Cline / Windsurf / Other Clients</b></summary>
+
+Add the configuration above to your MCP settings file. Refer to your client's documentation for the config file location.
+
+</details>
+
+### Connecting to Existing Browser
+
+To connect to a Chrome instance with remote debugging enabled:
 
 ```bash
-codex mcp add react-devtools -- npx react-devtools-mcp@latest
+# Start Chrome with remote debugging
+chrome --remote-debugging-port=9222
+
+# Add to MCP config with browserUrl
+claude mcp add react-context npx react-context-mcp@latest --browserUrl http://localhost:9222
 ```
 
-</details>
+### First Prompt
 
-<details>
-  <summary>Copilot / VS Code</summary>
-  Follow the MCP install <a href="https://code.visualstudio.com/docs/copilot/chat/mcp-servers#_add-an-mcp-server">guide</a>,
-  with the standard config from above. You can also install the React DevTools MCP server using the VS Code CLI:
+Try this in your MCP client:
 
-  ```bash
-  code --add-mcp '{"name":"react-devtools","command":"npx","args":["react-devtools-mcp@latest"]}'
-  ```
-</details>
+```
+Navigate to http://localhost:3000 and find the "Sign up" button.
+Show me the React component and its source file.
+```
 
-<details>
-  <summary>Windsurf</summary>
-  Follow the <a href="https://docs.windsurf.com/windsurf/cascade/mcp#mcp-config-json">configure MCP guide</a>
-  using the standard config from above.
-</details>
+Your AI assistant will open the browser, take a snapshot, find the button, and show you the complete component information with source location.
 
-<details>
-  <summary>Cline</summary>
-  Follow https://docs.cline.bot/mcp/configuring-mcp-servers and use the config provided above.
-</details>
+## MCP Tools
 
-<details>
-  <summary>Other MCP Clients</summary>
+### Page Management Tools
 
-  For other MCP clients, add the following configuration:
+#### `list_pages`
+Get a list of all open browser pages/tabs.
 
+**Example:**
+```json
+{"name": "list_pages", "arguments": {}}
+```
+
+**Response:**
+```
+## Pages
+0: http://localhost:3000 [selected]
+1: http://localhost:3001/admin
+```
+
+#### `select_page`
+Select a page by index for future operations.
+
+**Arguments:**
+- `pageIdx` (number) - Page index from list_pages
+
+**Example:**
+```json
+{"name": "select_page", "arguments": {"pageIdx": 1}}
+```
+
+#### `close_page`
+Close a page by index. Cannot close the last open page.
+
+**Arguments:**
+- `pageIdx` (number) - Page index to close
+
+#### `new_page`
+Create a new page and navigate to a URL.
+
+**Arguments:**
+- `url` (string) - URL to load
+- `timeout` (number, optional) - Navigation timeout in milliseconds
+
+**Example:**
+```json
+{"name": "new_page", "arguments": {"url": "http://localhost:3000"}}
+```
+
+#### `navigate_page`
+Navigate the currently selected page.
+
+**Arguments:**
+- `type` (string) - Navigation type: "url", "back", "forward", "reload"
+- `url` (string, optional) - Target URL (required for type="url")
+- `ignoreCache` (boolean, optional) - Ignore cache on reload
+- `timeout` (number, optional) - Navigation timeout
+
+**Example:**
+```json
+{"name": "navigate_page", "arguments": {"type": "url", "url": "http://localhost:3000/about"}}
+```
+
+### React DevTools Tools
+
+#### `ensure_react_attached`
+Inject React DevTools backend and detect renderers.
+
+**Response:**
+```
+React DevTools backend is installed.
+Renderers:
+- id=1 name=react-dom version=18.3.0
+```
+
+#### `list_react_roots`
+List all React roots on the current page.
+
+**Arguments:**
+- `rendererId` (number, optional) - Filter by renderer ID
+
+**Response:**
+```
+renderer=1(react-dom) root=1:0 idx=0 name=App nodes=156
+```
+
+#### `list_components`
+List React component tree with filtering.
+
+**Arguments:**
+- `rendererId` (number, optional) - Filter by renderer
+- `rootIndex` (number, optional) - Filter by root
+- `depth` (number, default: 3) - Traversal depth (1-10)
+- `maxNodes` (number, default: 200) - Max nodes (1-2000)
+- `nameFilter` (string, optional) - Substring match on name
+
+**Example:**
+```json
+{"name": "list_components", "arguments": {"depth": 5, "maxNodes": 100}}
+```
+
+#### `get_component`
+Get detailed component information by ID.
+
+**Arguments:**
+- `id` (string) - Component ID from list_components
+
+**Response:**
 ```json
 {
-  "mcpServers": {
-    "react-devtools": {
-      "command": "npx",
-      "args": ["-y", "react-devtools-mcp@latest"]
-    }
+  "id": "1:0:0.2.1",
+  "name": "Button",
+  "type": "ForwardRef",
+  "props": {"variant": "primary", "children": "Sign up"},
+  "state": null,
+  "source": {
+    "fileName": "src/components/Button.tsx",
+    "lineNumber": 42,
+    "columnNumber": 8
   }
 }
 ```
 
-</details>
+#### `highlight_component`
+Visually highlight a component in the browser.
 
-### Your First Prompt
+**Arguments:**
+- `id` (string) - Component ID from list_components
 
-Enter the following prompt in your MCP Client to check if everything is working:
+#### `take_snapshot`
+Capture accessibility tree snapshot with backendDOMNodeId for every element.
 
+**Arguments:**
+- `verbose` (boolean, default: false) - Include all elements or only interactive ones
+
+**Response:**
+```json
+{
+  "root": {
+    "role": "RootWebArea",
+    "name": "My App",
+    "children": [
+      {
+        "role": "button",
+        "name": "Sign up",
+        "backendDOMNodeId": 48
+      }
+    ]
+  }
+}
 ```
-Navigate to http://localhost:3000 and find the "Sign up" button. Show me the React component and its source file.
+
+#### `get_react_component_from_backend_node_id`
+**Recommended:** Get React component using CDP backendDOMNodeId from snapshot.
+
+**Arguments:**
+- `backendDOMNodeId` (number) - From take_snapshot
+
+**Why use this:**
+- ✅ Faster and more deterministic than ARIA selectors
+- ✅ Returns full component hierarchy from element to root
+- ✅ Precise source locations for each component
+
+**Example:**
+```json
+{"name": "get_react_component_from_backend_node_id", "arguments": {"backendDOMNodeId": 48}}
 ```
 
-Your MCP client should open the browser, take a snapshot, find the button, and show you the component information with source location.
+**Response:**
+```json
+{
+  "success": true,
+  "component": {
+    "name": "Button",
+    "type": "ForwardRef",
+    "source": {
+      "fileName": "src/components/Button.tsx",
+      "lineNumber": 42
+    },
+    "props": {"variant": "primary", "children": "Sign up"},
+    "owners": [
+      {"name": "OnboardingScreen", "source": {...}},
+      {"name": "App", "source": {...}}
+    ]
+  }
+}
+```
 
-> [!NOTE]
-> The MCP server will start the browser automatically once the MCP client uses a tool that requires a running browser instance. Connecting to the React DevTools MCP server on its own will not automatically start the browser.
+**Important:** backendDOMNodeId is only valid within the same browser session. Always use take_snapshot and this tool in the same MCP session.
 
-## Manual Installation (Development)
+#### `get_react_component_from_snapshot`
+**Legacy:** Get React component using ARIA role and name.
 
-If you want to install from source:
+**Arguments:**
+- `role` (string) - Element role from snapshot
+- `name` (string) - Element name/text from snapshot
+
+**When to use:**
+- Cross-session element tracking
+- No backendDOMNodeId available
+
+**Example:**
+```json
+{"name": "get_react_component_from_snapshot", "arguments": {"role": "button", "name": "Sign up"}}
+```
+
+## Common Workflows
+
+### Finding Component Source from UI Text (Recommended Method)
+
+Use CDP backendDOMNodeId for fastest, most reliable lookups:
 
 ```bash
-git clone https://github.com/uxfreak/React-Devtools-MCP.git
-cd React-Devtools-MCP
+# 1. Take snapshot (includes backendDOMNodeId for every element)
+take_snapshot
+
+# 2. Find your element in the snapshot JSON:
+{
+  "role": "button",
+  "name": "Sign up",
+  "backendDOMNodeId": 48  ← Use this
+}
+
+# 3. Get React component information
+get_react_component_from_backend_node_id(48)
+```
+
+**Result:**
+- ✅ Component name: Button (ForwardRef)
+- ✅ Source: src/components/Button.tsx:42
+- ✅ Props: {variant: "primary", children: "Sign up"}
+- ✅ Owner chain: OnboardingScreen → App
+
+### Managing Multiple Pages
+
+```bash
+# List all open pages
+list_pages
+
+# Create a new page
+new_page("http://localhost:3001/admin")
+
+# Switch between pages
+select_page(1)
+
+# Navigate current page
+navigate_page(type="url", url="http://localhost:3001/settings")
+
+# Close a page
+close_page(1)
+```
+
+### Inspecting Component Tree
+
+```bash
+# 1. Ensure React is attached
+ensure_react_attached
+
+# 2. List roots
+list_react_roots
+
+# 3. Browse component tree
+list_components(depth=5, maxNodes=200)
+
+# 4. Get detailed component info
+get_component("1:0:0.2.1")
+
+# 5. Highlight component visually
+highlight_component("1:0:0.2.1")
+```
+
+## Manual Installation
+
+For development or local installation:
+
+```bash
+git clone https://github.com/uxfreak/react-context-mcp.git
+cd react-context-mcp
 npm install
 npm run build
+
+# Link globally
+npm link
+
+# Now use in MCP config
+claude mcp add react-context react-context-mcp
 ```
 
-## Requirements for Source Location Tracking
+## Command-Line Options
 
-For the `get_react_component_from_snapshot` tool to extract source file locations (React 19+ compatible), your React application needs the Babel plugin that adds `data-inspector-*` attributes:
+```bash
+# Auto-navigate on startup
+TARGET_URL=http://localhost:3000 react-context-mcp
+
+# Connect to existing Chrome
+react-context-mcp --browserUrl http://localhost:9222
+
+# Isolated mode (separate Chrome profile)
+react-context-mcp --isolated --headless
+
+# Custom Chrome executable
+react-context-mcp --executablePath /path/to/chrome
+
+# Set viewport size
+react-context-mcp --viewport 1920x1080
+```
+
+**Available flags:**
+- `--headless` - Run Chrome in headless mode
+- `--isolated` - Use isolated user data directory
+- `--browserUrl <url>` - Connect to existing Chrome debugging session
+- `--wsEndpoint <url>` - WebSocket endpoint for CDP
+- `--executablePath <path>` - Path to Chrome executable
+- `--channel <channel>` - Chrome channel (stable, canary, beta, dev)
+- `--viewport <WxH>` - Viewport size (e.g., 1280x720)
+
+## Source Location Tracking
+
+For accurate source locations, your React app needs `data-inspector-*` attributes from Babel:
 
 ### Vite
-
-Add to `vite.config.ts`:
 ```typescript
+// vite.config.ts
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -165,28 +439,17 @@ export default defineConfig({
   plugins: [
     react({
       babel: {
-        plugins: [
-          ['@babel/plugin-transform-react-jsx-development', {
-            // Adds data-inspector-line, data-inspector-column, etc.
-          }]
-        ]
+        plugins: ['@babel/plugin-transform-react-jsx-development']
       }
     })
   ]
 })
 ```
 
-### Webpack / Create React App
+### Next.js / Create React App
+Automatically included in development mode. No configuration needed.
 
-The plugin is automatically included in development mode. No additional configuration needed.
-
-### Next.js
-
-Next.js includes this by default in development mode.
-
-### Manual Babel Config
-
-Add to `.babelrc` or `babel.config.js`:
+### Manual Babel
 ```json
 {
   "env": {
@@ -197,530 +460,78 @@ Add to `.babelrc` or `babel.config.js`:
 }
 ```
 
-**Note:** Source location tracking only works in development builds. Production builds strip this metadata for performance.
+**Note:** Source tracking only works in development builds.
 
-## Usage
-
-### Starting the Server
-
-```bash
-# With a target URL (auto-navigates on startup)
-TARGET_URL=http://localhost:3000 node build/src/main.js
-
-# Connect to existing Chrome instance
-node build/src/main.js --browserUrl http://localhost:9222
-
-# Isolated mode (separate Chrome profile)
-node build/src/main.js --isolated --headless
-```
-
-### Command-line Options
-
-- `--headless` - Run Chrome in headless mode (default: true)
-- `--isolated` - Use isolated user data directory (avoids profile conflicts)
-- `--browserUrl <url>` - Connect to existing Chrome debugging session
-- `--wsEndpoint <url>` - WebSocket endpoint for Chrome DevTools Protocol
-- `--executablePath <path>` - Path to Chrome executable
-- `--channel <channel>` - Chrome release channel (stable, canary, beta, dev)
-- `--viewport <WxH>` - Set viewport size (e.g., 1280x720)
-
-## MCP Tools
-
-### 1. `ensure_react_attached`
-
-Injects React DevTools backend and detects renderers.
-
-**Example:**
-```json
-{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"ensure_react_attached","arguments":{}}}
-```
-
-**Response:**
-```json
-{
-  "result": {
-    "content": [{
-      "type": "text",
-      "text": "React DevTools backend is installed.\nRenderers:\n- id=1 name=react-dom version=18.2.0 bundleType=1"
-    }]
-  }
-}
-```
-
-### 2. `list_react_roots`
-
-Lists all React roots on the page.
-
-**Example:**
-```json
-{"jsonrpc":"2.0","id":"2","method":"tools/call","params":{"name":"list_react_roots","arguments":{}}}
-```
-
-**Response:**
-```json
-{
-  "result": {
-    "content": [{
-      "type": "text",
-      "text": "renderer=1(react-dom) root=1:0 idx=0 name=Unknown nodes=103"
-    }]
-  }
-}
-```
-
-### 3. `list_components`
-
-Lists React component tree with filtering options.
-
-**Arguments:**
-- `rendererId` (optional) - Filter by renderer ID
-- `rootIndex` (optional) - Filter by root index
-- `depth` (number, default: 100) - Maximum traversal depth
-- `maxNodes` (number, default: 10000) - Maximum nodes to return
-- `nameFilter` (string, optional) - Substring match on component name
-- `includeTypes` (array, optional) - Filter by component types. If not provided, shows only authored components (FunctionComponent, ClassComponent, etc.). Pass `[]` for all types including DOM elements.
-
-**Example (authored components only):**
-```json
-{"jsonrpc":"2.0","id":"3","method":"tools/call","params":{"name":"list_components","arguments":{"depth":5}}}
-```
-
-**Example (all including DOM):**
-```json
-{"jsonrpc":"2.0","id":"3","method":"tools/call","params":{"name":"list_components","arguments":{"depth":100,"maxNodes":10000,"includeTypes":[]}}}
-```
-
-**Response:**
-```json
-{
-  "result": {
-    "content": [{
-      "type": "text",
-      "text": "1:0:0.0.0 depth=2 type=FunctionComponent name=App key=null\n1:0:0.0.0.0 depth=3 type=FunctionComponent name=PaddingProvider key=null"
-    }]
-  }
-}
-```
-
-### 4. `list_function_components`
-
-Convenience tool to list only FunctionComponent nodes.
-
-**Arguments:**
-- `rendererId` (optional)
-- `rootIndex` (optional)
-- `depth` (number, default: 100)
-- `maxNodes` (number, default: 10000)
-
-### 5. `get_component`
-
-Inspect detailed component information by ID.
-
-**Arguments:**
-- `id` (string) - Component ID from `list_components`
-
-**Example:**
-```json
-{"jsonrpc":"2.0","id":"4","method":"tools/call","params":{"name":"get_component","arguments":{"id":"1:0:0.0.0"}}}
-```
-
-**Response:**
-```json
-{
-  "result": {
-    "content": [{
-      "type": "text",
-      "text": "{\n  \"id\": \"1:0:0.0.0\",\n  \"name\": \"App\",\n  \"type\": \"Tag0\",\n  \"props\": {...},\n  \"state\": null,\n  \"source\": {\n    \"fileName\": \"src/App.tsx\",\n    \"lineNumber\": 42,\n    \"columnNumber\": 4\n  },\n  \"owners\": [{\"name\": \"Root\"}]\n}"
-    }]
-  }
-}
-```
-
-### 6. `highlight_component`
-
-Visually highlight a component in the browser.
-
-**Arguments:**
-- `id` (string) - Component ID from `list_components`
-
-**Example:**
-```json
-{"jsonrpc":"2.0","id":"5","method":"tools/call","params":{"name":"highlight_component","arguments":{"id":"1:0:0.0.0"}}}
-```
-
-### 7. `take_snapshot`
-
-Capture accessibility tree snapshot to find text and UI elements on the page.
-
-**Arguments:**
-- `verbose` (boolean, optional, default: false) - Include all elements or only "interesting" ones
-
-**Example:**
-```json
-{"jsonrpc":"2.0","id":"6","method":"tools/call","params":{"name":"take_snapshot","arguments":{"verbose":true}}}
-```
-
-**Response:**
-```json
-{
-  "result": {
-    "content": [{
-      "type": "text",
-      "text": "{\n  \"root\": {\n    \"role\": \"RootWebArea\",\n    \"name\": \"My App\",\n    \"uid\": \"1763797635548_0\",\n    \"children\": [\n      {\n        \"role\": \"button\",\n        \"name\": \"Sign up\",\n        \"uid\": \"1763797635548_38\"\n      },\n      {\n        \"role\": \"button\",\n        \"name\": \"Log in\",\n        \"uid\": \"1763797635548_46\"\n      }\n    ]\n  },\n  \"snapshotId\": \"1763797635548\"\n}"
-    }]
-  }
-}
-```
-
-### 8. `get_react_component_from_snapshot`
-
-Get complete React component information for an element found in the snapshot. Returns component name, type, props, state, source location, and owner hierarchy.
-
-**Uses ARIA selectors** built on the browser's accessibility tree for reliable element finding. This approach is more robust than manual DOM traversal and successfully handles headings, images, buttons, and most UI elements.
-
-**Arguments:**
-- `role` (string) - Element role from snapshot (e.g., "button", "heading", "paragraph")
-- `name` (string) - Element name/text from snapshot (e.g., "Sign up", "Log in")
-
-**Example:**
-```json
-{"jsonrpc":"2.0","id":"7","method":"tools/call","params":{"name":"get_react_component_from_snapshot","arguments":{"role":"button","name":"Sign up"}}}
-```
-
-**Response:**
-```json
-{
-  "result": {
-    "content": [{
-      "type": "text",
-      "text": "{\n  \"success\": true,\n  \"component\": {\n    \"name\": \"Button\",\n    \"type\": \"ForwardRef\",\n    \"props\": {\n      \"variant\": \"primary\",\n      \"size\": \"large\",\n      \"onClick\": {},\n      \"children\": \"Sign up\"\n    },\n    \"state\": {...},\n    \"source\": {\n      \"fileName\": \"src/design-system/components/organisms/OnboardingScreen/OnboardingScreen.tsx\",\n      \"lineNumber\": 361,\n      \"columnNumber\": 10\n    },\n    \"owners\": [\n      {\"name\": \"Box\", \"type\": \"ForwardRef\", \"source\": {...}},\n      {\"name\": \"OnboardingScreen\", \"type\": \"FunctionComponent\", \"source\": {...}},\n      {\"name\": \"OnboardingPage\", \"type\": \"FunctionComponent\", \"source\": {...}}\n    ]\n  }\n}"
-    }]
-  }
-}
-```
-
-### 9. `get_react_component_from_backend_node_id`
-
-**NEW! Faster and more deterministic alternative to ARIA selectors.**
-
-Get React component information using CDP `backendDOMNodeId` from the accessibility tree snapshot. This approach provides direct DOM element access without searching.
-
-**Use this when:**
-- You have a `backendDOMNodeId` from `take_snapshot` (snapshots now include this for every element)
-- You need faster, more deterministic element lookup
-- You're making multiple queries in the same session
-
-**Arguments:**
-- `backendDOMNodeId` (number) - Backend DOM node ID from snapshot's `backendDOMNodeId` field
-
-**Example:**
-```json
-{"jsonrpc":"2.0","id":"8","method":"tools/call","params":{"name":"get_react_component_from_backend_node_id","arguments":{"backendDOMNodeId":48}}}
-```
-
-**Response:** (Same format as `get_react_component_from_snapshot`)
-
-**Important:** The `backendDOMNodeId` is only valid within the same browser session. Always use `take_snapshot` and `get_react_component_from_backend_node_id` in the same MCP session (same JSON-RPC connection).
-
-## Common Workflows
-
-### Finding Source Location of Text on Page (CDP backendDOMNodeId Method)
-
-**Recommended approach:** Use CDP backendDOMNodeId for faster, more deterministic lookups.
-
-**Single MCP session with both snapshot and component lookup:**
-
-```bash
-cat <<'EOF' > find-component.jsonl
-{"jsonrpc":"2.0","id":"init","method":"initialize","params":{"protocolVersion":"2024-12-19","capabilities":{},"clientInfo":{"name":"cli","version":"0.0.0"}}}
-{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"take_snapshot","arguments":{"verbose":true}}}
-{"jsonrpc":"2.0","id":"2","method":"tools/call","params":{"name":"get_react_component_from_backend_node_id","arguments":{"backendDOMNodeId":48}}}
-EOF
-
-(cat find-component.jsonl; sleep 10) | TARGET_URL=http://localhost:3000 node build/src/main.js --isolated --headless
-```
-
-**Step 1:** The snapshot returns the accessibility tree with `backendDOMNodeId` for each element:
-```json
-{
-  "role": "button",
-  "name": "Sign up",
-  "uid": "1763809431664_38",
-  "backendDOMNodeId": 48
-}
-```
-
-**Step 2:** Use the `backendDOMNodeId` to get the React component (happens in same session automatically)
-
-**Result:**
-```json
-{
-  "success": true,
-  "component": {
-    "name": "Button",
-    "type": "ForwardRef",
-    "source": {
-      "fileName": "src/components/Button.tsx",
-      "lineNumber": 42,
-      "columnNumber": 8
-    },
-    "props": {"variant": "primary", "children": "Sign up"},
-    "owners": [
-      {"name": "OnboardingScreen", "source": "src/pages/Onboarding.tsx:136"},
-      {"name": "App", "source": "src/App.tsx:102"}
-    ]
-  }
-}
-```
-
-### Finding Source Location of Text on Page (ARIA Selector Method)
-
-**Legacy approach:** Use ARIA selectors when you need cross-session compatibility.
-
-This workflow demonstrates how to find any visible text (e.g., "Sign up") and trace it back to the React component and source file.
-
-**Step 1: Take a snapshot to find the text**
-```bash
-cat <<'EOF' > find-text.jsonl
-{"jsonrpc":"2.0","id":"init","method":"initialize","params":{"protocolVersion":"2024-12-19","capabilities":{},"clientInfo":{"name":"cli","version":"0.0.0"}}}
-{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"take_snapshot","arguments":{"verbose":true}}}
-EOF
-
-(cat find-text.jsonl; sleep 10) | TARGET_URL=http://localhost:3000 node build/src/main.js --isolated --headless
-```
-
-**Step 2: Search the snapshot JSON for your text**
-
-Look for nodes with your target text in the `name` field:
-```json
-{
-  "role": "button",
-  "name": "Sign up",
-  "uid": "1763797635548_38"
-}
-```
-
-Note the `role` ("button") and `name` ("Sign up") values.
-
-**Step 3: Get React component information**
-```bash
-cat <<'EOF' > get-component.jsonl
-{"jsonrpc":"2.0","id":"init","method":"initialize","params":{"protocolVersion":"2024-12-19","capabilities":{},"clientInfo":{"name":"cli","version":"0.0.0"}}}
-{"jsonrpc":"2.0","id":"2","method":"tools/call","params":{"name":"get_react_component_from_snapshot","arguments":{"role":"button","name":"Sign up"}}}
-EOF
-
-(cat get-component.jsonl; sleep 10) | TARGET_URL=http://localhost:3000 node build/src/main.js --isolated --headless
-```
-
-**Result: Complete component information**
-```json
-{
-  "success": true,
-  "component": {
-    "name": "Button",
-    "type": "ForwardRef",
-    "source": {
-      "fileName": "src/design-system/components/organisms/OnboardingScreen/OnboardingScreen.tsx",
-      "lineNumber": 361,
-      "columnNumber": 10
-    },
-    "props": {"variant": "primary", "size": "large", "children": "Sign up"},
-    "owners": [
-      {"name": "OnboardingScreen", "source": "src/pages/OnboardingPage.tsx:136"},
-      {"name": "OnboardingPage", "source": "src/App.tsx:102"}
-    ]
-  }
-}
-```
-
-Now you know:
-- ✅ Component name: `Button` (ForwardRef)
-- ✅ Source file: `OnboardingScreen.tsx` line 361
-- ✅ Props: `variant="primary" size="large"`
-- ✅ Parent components: `OnboardingScreen` → `OnboardingPage` → `App`
-
-### Testing via JSON-RPC
-
-Create a test file with your commands:
-
-```bash
-cat <<'EOF' > test-commands.jsonl
-{"jsonrpc":"2.0","id":"init","method":"initialize","params":{"protocolVersion":"2024-12-19","capabilities":{},"clientInfo":{"name":"cli","version":"0.0.0"}}}
-{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"ensure_react_attached","arguments":{}}}
-{"jsonrpc":"2.0","id":"2","method":"tools/call","params":{"name":"list_react_roots","arguments":{}}}
-{"jsonrpc":"2.0","id":"3","method":"tools/call","params":{"name":"list_components","arguments":{"depth":5}}}
-{"jsonrpc":"2.0","id":"4","method":"tools/call","params":{"name":"take_snapshot","arguments":{"verbose":true}}}
-EOF
-
-(cat test-commands.jsonl; sleep 15) | TARGET_URL=http://localhost:51743 node build/src/main.js --isolated --headless
-```
-
-## Component ID Format
-
-Component IDs use the format: `{rendererId}:{rootIndex}:{path}`
-
-- **rendererId**: React renderer ID (usually 1 for react-dom)
-- **rootIndex**: Index of the React root (usually 0)
-- **path**: Dot-separated child indices (e.g., `0.2.1` means first child → third child → second child)
-
-Example: `1:0:0.2.1`
-
-## How It Works
+## Architecture
 
 ### React Backend Injection
-
-On page load, the server:
-1. Injects a custom React DevTools global hook
-2. Intercepts `renderer.inject()` calls when React initializes
+1. Injects custom `__REACT_DEVTOOLS_GLOBAL_HOOK__` on page load
+2. Intercepts `renderer.inject()` when React initializes
 3. Captures fiber roots via `onCommitFiberRoot` hook
 4. Stores fiber tree for inspection
 
 ### Component Tree Traversal
-
-The server walks the React fiber tree depth-first:
+- Walks React fiber tree depth-first
 - Starts from `root.current` fiber node
 - Traverses via `fiber.child` and `fiber.sibling` pointers
-- Generates stable path-based IDs for each component
-- Extracts props, state, source info from fiber properties
+- Generates stable path-based IDs
 
-### Source Location Extraction (React 19 Compatible)
-
-Source information is extracted from `data-inspector-*` attributes added by Babel:
-- `data-inspector-relative-path` - Source file path
-- `data-inspector-line` - Line number
-- `data-inspector-column` - Column number
-
-**Why not `_debugSource`?** React 19 disabled the `_debugSource` and `_debugOwner` fiber properties for performance. This server uses the Babel plugin approach which is more reliable and future-proof.
-
-**Component Hierarchy:** The owners chain is built by walking up the fiber tree using `fiber.return` pointers, collecting all authored components (FunctionComponent, ClassComponent, ForwardRef, MemoComponent) along the way.
-
-### Accessibility Tree Snapshot
-
-The `take_snapshot` tool now supports **two approaches** for element-to-component mapping:
-
-**CDP Approach (Recommended):**
-1. Calls Chrome DevTools Protocol `Accessibility.getFullAXTree()`
-2. Extracts `backendDOMNodeId` for every element in the tree
-3. Generates unique UIDs for each node
-4. Returns hierarchical tree with roles, names, text content, **and backendDOMNodeId**
-
-**Legacy Puppeteer Approach:**
-1. Calls Puppeteer's `page.accessibility.snapshot()` API (deprecated)
-2. Generates unique UIDs for each node
-3. Returns hierarchical tree with roles, names, and text content (no backendDOMNodeId)
-
-### Two Methods for Mapping Elements to React Components
+### Two Element-to-Component Mapping Methods
 
 #### Method 1: CDP backendDOMNodeId (Recommended)
-
-**Tool:** `get_react_component_from_backend_node_id`
-
-**How it works:**
-1. Get `backendDOMNodeId` from snapshot (included for every element)
-2. Use CDP `DOM.resolveNode({backendNodeId})` to get RemoteObject reference
-3. Use CDP `Runtime.callFunctionOn()` to execute JavaScript in element context
-4. Extract React fiber from `element.__reactFiber$...` property
-5. Walk fiber tree to collect all components (FunctionComponent, ClassComponent, ForwardRef)
-6. Return complete component hierarchy with source locations
+1. Get backendDOMNodeId from snapshot
+2. Use `DOM.resolveNode({backendNodeId})` to get element reference
+3. Execute `element.__reactFiber$...` in element context
+4. Walk fiber tree to collect component hierarchy
+5. Return complete chain with source locations
 
 **Benefits:**
-- ✅ **Faster** - Direct element access, no searching
-- ✅ **More deterministic** - Unique numeric ID per element
-- ✅ **Full component hierarchy** - Returns all components from element to root
-- ✅ **Precise source locations** - File, line, and column for each component
-
-**Important constraint - Session staleness:**
-
-BackendDOMNodeIds are **only valid within the same browser session**. Causes of staleness:
-
-1. **Different browser sessions** (95% probability) - Each `--isolated --headless` run creates a new browser instance. IDs from one run cannot be used in another.
-2. **Page navigation/reload** (80% probability) - DOM tree is rebuilt with new IDs.
-3. **DOM mutations** (20% probability) - React re-renders may invalidate IDs.
-4. **Timing/race conditions** (15% probability) - Async updates between getting and using ID.
-
-**Solution:** Always use `take_snapshot` and `get_react_component_from_backend_node_id` in the **same MCP session** (same JSON-RPC connection to the same browser instance).
+- ✅ Faster (direct access)
+- ✅ More deterministic (unique numeric ID)
+- ✅ Full component hierarchy
+- ✅ Precise source locations
 
 #### Method 2: ARIA Selectors (Legacy)
-
-**Tool:** `get_react_component_from_snapshot`
-
-**How it works:**
-1. Takes `role` and `name` from snapshot (e.g., `{role: "button", name: "Sign up"}`)
-2. Uses Puppeteer's ARIA selector syntax: `aria/Name[role="button"]`
-3. Finds the DOM element via browser's built-in accessibility tree
-4. Extracts React fiber and component data from `element.__reactFiber$...` keys
-5. Returns complete component information (name, type, props, state, source, owners)
+1. Use `aria/Name[role="button"]` selector
+2. Find element via accessibility tree
+3. Extract React fiber from element
+4. Return component information
 
 **Benefits:**
-- ✅ Built on browser's native accessibility tree (same as screen readers)
-- ✅ Handles dynamic content and shadow DOM
-- ✅ More reliable than text searching or XPath queries
-- ✅ No session staleness issues (searches on demand)
-
-**Limitations:**
-- ⚠️ Slower (requires searching)
-- ⚠️ Less deterministic (multiple elements may match same role+name)
-- ⚠️ Requires unique role+name combinations
-
-**When to use each method:**
-
-| Use Case | Recommended Method |
-|----------|-------------------|
-| Single session, multiple element queries | CDP backendDOMNodeId |
-| Cross-session element tracking | ARIA selectors |
-| Automated testing (fresh browser per test) | ARIA selectors |
-| Interactive debugging (persistent session) | CDP backendDOMNodeId |
-| Need guaranteed uniqueness | CDP backendDOMNodeId |
-| Non-unique element names | CDP backendDOMNodeId |
-
-## Environment Variables
-
-- `TARGET_URL` - URL to navigate to on startup
-
-## Development
-
-```bash
-# Type checking
-npm run typecheck
-
-# Build
-npm run build
-
-# Clean build artifacts
-npm run clean
-```
+- ✅ Cross-session compatible
+- ✅ No staleness issues
+- ✅ Works with dynamic content
 
 ## Troubleshooting
 
-### "The browser is already running"
-
-Use `--isolated` flag to create a separate Chrome profile:
+### Browser Already Running
+Use `--isolated` flag:
 ```bash
-node build/src/main.js --isolated
+react-context-mcp --isolated
 ```
 
-### No React renderers detected
-
+### No React Renderers Detected
 - Ensure React is loaded on the page
-- The page might be using a React build that doesn't expose the DevTools hook
-- Try refreshing the page after the backend is injected
+- Try refreshing after backend injection
+- Check browser console for errors
 
-### Component source location not available
+### Missing Source Locations
+- Requires development build
+- Add Babel plugin (see Source Location Tracking)
+- Production builds strip this metadata
 
-- Requires React Inspector metadata or debug builds
-- Production builds may strip source information
-- Use `data-inspector-*` attributes in development
-
-## Future Enhancements
-
-- [x] Map accessibility tree to React components (`get_react_component_from_snapshot`)
-- [x] Get component source from text/UI elements
-- [ ] Support for multiple React roots
-- [ ] Component state editing
-- [ ] Props diffing between renders
-- [ ] Performance profiling integration
-- [ ] Click-to-inspect UI element → get React component
+### backendDOMNodeId Not Found
+- Only valid in same browser session
+- Use take_snapshot and get_react_component_from_backend_node_id in same MCP session
+- For cross-session tracking, use ARIA selectors instead
 
 ## License
 
 Apache-2.0
+
+## Links
+
+- **npm Package:** https://www.npmjs.com/package/react-context-mcp
+- **GitHub Repository:** https://github.com/uxfreak/react-context-mcp
+- **Issues:** https://github.com/uxfreak/react-context-mcp/issues
+- **Model Context Protocol:** https://modelcontextprotocol.io
