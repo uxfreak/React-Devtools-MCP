@@ -7,24 +7,383 @@
 
 </div>
 
-`react-context-mcp` lets your AI coding assistant (Claude, Cursor, Copilot, Gemini) inspect and debug React applications in a live Chrome browser. It acts as a Model Context Protocol (MCP) server, providing access to React component trees, props, state, source locations, and full browser control for reliable debugging and development assistance.
+## Ask Your AI to Find React Components
 
-## Key Features
+**The Problem:** You see a "Sign up" button on screen and need to find which component renders it, what file it's in, and what props it has. This typically requires grepping code, searching files, and adding console.logs.
 
-### React DevTools Integration
-- **Component Tree Inspection** - Browse React fiber tree with props, state, and source locations
-- **Text-to-Component Mapping** - Find any visible text and trace it to the React component and source file
-- **Two Element Mapping Methods**:
-  - **CDP backendDOMNodeId** (Recommended) - Fast, deterministic element access via Chrome DevTools Protocol
-  - **ARIA Selectors** (Legacy) - Cross-session element searching via accessibility tree
-- **Component Highlighting** - Visual highlighting of components in the browser
-- **Automatic Backend Injection** - React DevTools backend hook injected on page load
+**With React Context MCP:** Ask your AI assistant and get the component details immediately.
 
-### Browser Page Management
-- **Multi-page Support** - List, select, and switch between browser tabs
-- **Page Navigation** - Navigate to URLs, go back/forward, reload pages
-- **Page Control** - Create new pages, close tabs, manage browser sessions
-- **Accessibility Snapshots** - Capture page structure with text content and DOM node IDs
+```typescript
+// You ask your AI:
+"Find the 'Sign up' button and show me the React component"
+
+// Your AI makes 2 tool calls:
+// 1. take_snapshot() → Gets page structure with element IDs
+// 2. get_react_component_from_backend_node_id(48) → Gets component details
+
+// You get the answer:
+{
+  component: "Button",
+  source: "src/design-system/atoms/Button/Button.tsx:42:8",
+  props: { variant: "primary", size: "large", children: "Sign up" },
+  owners: [
+    { name: "OnboardingScreen", source: "src/screens/OnboardingScreen.tsx:222:12" },
+    { name: "App", source: "src/App.tsx:15:3" }
+  ]
+}
+```
+
+**Example Result:** In production use, a developer analyzed 30+ components across a 6-screen signup flow, finding design system compliance issues that would have taken significantly longer to find manually.
+
+---
+
+## What You Can Do
+
+Ask your AI assistant to:
+
+- Find any UI element and trace it to its React component and source file
+- Analyze all components of a specific type on a page (e.g., all TextFields, all Buttons)
+- Show component hierarchies with full owner chains and source locations
+- Navigate through multi-page flows and inspect components across screens
+
+`react-context-mcp` is a Model Context Protocol (MCP) server that connects your AI assistant (Claude, Cursor, Copilot, Gemini) to React applications running in Chrome. It provides instant access to component trees, props, state, and source locations.
+
+## How It Works: The Tool Journey
+
+When you ask your AI *"Find the Sign up button and show me the component"*, here's what happens behind the scenes:
+
+### Step 1: Your AI Takes a Snapshot
+```typescript
+take_snapshot({ verbose: false })
+```
+
+Returns the page structure as an accessibility tree with **backendDOMNodeId** for every element:
+
+```json
+{
+  "role": "RootWebArea",
+  "name": "Onboarding",
+  "backendDOMNodeId": 12,
+  "children": [
+    {
+      "role": "heading",
+      "name": "Create your account",
+      "backendDOMNodeId": 23
+    },
+    {
+      "role": "form",
+      "name": "Sign up form",
+      "backendDOMNodeId": 31,
+      "children": [
+        {
+          "role": "textbox",
+          "name": "Email address",
+          "backendDOMNodeId": 42
+        },
+        {
+          "role": "textbox",
+          "name": "Password",
+          "backendDOMNodeId": 45
+        },
+        {
+          "role": "button",
+          "name": "Sign up",
+          "backendDOMNodeId": 48  // ← AI finds this!
+        },
+        {
+          "role": "button",
+          "name": "Back",
+          "backendDOMNodeId": 51
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Step 2: AI Finds Your Element
+
+Your AI searches the tree for `"Sign up"` button → Found at `backendDOMNodeId: 48`
+
+### Step 3: AI Fetches the React Component
+```typescript
+get_react_component_from_backend_node_id(48)
+```
+
+Uses the DOM node ID to traverse the React fiber tree and returns the **complete component hierarchy**:
+
+```json
+{
+  "success": true,
+  "component": {
+    "name": "Button",
+    "type": "ForwardRef",
+    "source": {
+      "fileName": "src/design-system/atoms/Button/Button.tsx",
+      "lineNumber": 42,
+      "columnNumber": 8
+    },
+    "props": {
+      "variant": "primary",
+      "size": "large",
+      "children": "Sign up"
+    },
+    "owners": [
+      {
+        "name": "OnboardingScreen",
+        "source": { "fileName": "src/screens/OnboardingScreen.tsx", "lineNumber": 222 }
+      },
+      {
+        "name": "App",
+        "source": { "fileName": "src/App.tsx", "lineNumber": 15 }
+      }
+    ]
+  }
+}
+```
+
+**Total time:** ~2 seconds. **Total tool calls:** 2.
+
+---
+
+## The Power: DOM Node → React Component Mapping
+
+This is what makes it work - every DOM element maps to its React component:
+
+```
+Accessibility Tree (from snapshot)          React Fiber Tree (internal)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+<button> "Sign up"                          Button (ForwardRef)
+  backendDOMNodeId: 48  ─────────────────>    source: Button.tsx:42
+  role: "button"                                props: { variant: "primary" }
+  name: "Sign up"                               ↑ parent
+                                                │
+                                              OnboardingScreen
+                                                source: OnboardingScreen.tsx:222
+                                                ↑ parent
+                                                │
+                                              App
+                                                source: App.tsx:15
+```
+
+**The magic:** `backendDOMNodeId: 48` is the bridge between what you see on screen and the React component tree.
+
+---
+
+## Real-World Use Cases (From Actual Usage)
+
+### Use Case 1: Design System Compliance Audit
+
+**Scenario:** You're migrating to a design system. You need to verify all TextField components on a 6-screen signup flow use the new design system version.
+
+**You ask:** *"Navigate through the signup flow and check if all text inputs use the design system TextField"*
+
+**The Journey:**
+
+```typescript
+// Screen 1: Email
+navigate_page({ url: "http://localhost:3000/signup/email" })
+take_snapshot()
+```
+
+**Snapshot returns:**
+```json
+{
+  "role": "form",
+  "children": [
+    {
+      "role": "textbox",
+      "name": "Email address",
+      "backendDOMNodeId": 52  // ← AI finds this
+    }
+  ]
+}
+```
+
+**AI checks the component:**
+```typescript
+get_react_component_from_backend_node_id(52)
+// Response:
+{
+  "component": "TextField",
+  "source": "src/design-system/forms/TextField.tsx:28"  // ✅ Design system!
+}
+```
+
+**Screen 2: Personal Info**
+```typescript
+navigate_page({ url: "http://localhost:3000/signup/personal-info" })
+take_snapshot()
+```
+
+**Snapshot returns:**
+```json
+{
+  "role": "form",
+  "children": [
+    {
+      "role": "textbox",
+      "name": "First name",
+      "backendDOMNodeId": 67
+    },
+    {
+      "role": "textbox",
+      "name": "Last name",
+      "backendDOMNodeId": 71
+    },
+    {
+      "role": "textbox",
+      "name": "Phone",
+      "backendDOMNodeId": 75
+    }
+  ]
+}
+```
+
+**AI checks each:**
+```typescript
+get_react_component_from_backend_node_id(67)  // ✅ Design system
+get_react_component_from_backend_node_id(71)  // ✅ Design system
+get_react_component_from_backend_node_id(75)  // ❌ Legacy! "src/components/Input.tsx"
+```
+
+**Result:** Analyzed 30+ TextFields across 6 screens. Found 2 legacy components still using `src/components/Input.tsx` instead of the design system.
+
+### Use Case 2: Component Refactoring Safety Check
+
+**Scenario:** Before refactoring the Button component, find all instances and document their current props.
+
+**You ask:** *"Find all buttons on this page and show me their props"*
+
+**The Journey:**
+
+```typescript
+take_snapshot({ verbose: true })
+```
+
+**Snapshot returns all buttons:**
+```json
+{
+  "children": [
+    {
+      "role": "button",
+      "name": "Continue",
+      "backendDOMNodeId": 48
+    },
+    {
+      "role": "button",
+      "name": "Back",
+      "backendDOMNodeId": 52
+    },
+    {
+      "role": "button",
+      "name": "Skip",
+      "backendDOMNodeId": 67
+    },
+    {
+      "role": "button",
+      "name": "Cancel",
+      "backendDOMNodeId": 73
+    }
+    // ... 11 more buttons
+  ]
+}
+```
+
+**AI analyzes each button:**
+```typescript
+get_react_component_from_backend_node_id(48)
+// { component: "Button", props: { variant: "primary", size: "large" } }
+
+get_react_component_from_backend_node_id(52)
+// { component: "Button", props: { variant: "secondary", size: "medium" } }
+
+get_react_component_from_backend_node_id(67)
+// { component: "Button", props: { variant: "text", size: "medium" } }
+
+// ... checks all 15 buttons
+```
+
+**AI generates report:**
+```
+Found 15 Button components:
+- All use props: variant, size, children
+- 8 use variant="primary"
+- 5 use variant="secondary"
+- 2 use variant="text"
+- Safe to add new optional prop: icon (won't break existing usage)
+```
+
+**Result:** Complete prop inventory generated. Safe refactoring plan created based on actual usage patterns.
+
+### Use Case 3: Accessibility Audit
+
+**Scenario:** Ensure all text inputs have proper labels and autocomplete attributes.
+
+**You ask:** *"Check if all text inputs on this page have proper labels and autocomplete"*
+
+**The Journey:**
+
+```typescript
+take_snapshot({ verbose: true })
+```
+
+**Snapshot returns all textboxes:**
+```json
+{
+  "children": [
+    {
+      "role": "textbox",
+      "name": "Email address",
+      "backendDOMNodeId": 42
+    },
+    {
+      "role": "textbox",
+      "name": "",  // ❌ No accessible name!
+      "backendDOMNodeId": 45
+    },
+    {
+      "role": "textbox",
+      "name": "First name",
+      "backendDOMNodeId": 51
+    }
+  ]
+}
+```
+
+**AI checks each input's props:**
+```typescript
+get_react_component_from_backend_node_id(42)
+// ✅ { props: { label: "Email address", autoComplete: "email" } }
+
+get_react_component_from_backend_node_id(45)
+// ❌ { props: { placeholder: "Enter password" } }  // No label! No autocomplete!
+
+get_react_component_from_backend_node_id(51)
+// ⚠️ { props: { label: "First name" } }  // Has label, missing autocomplete
+```
+
+**AI generates accessibility report:**
+```
+Accessibility Issues Found:
+
+❌ Critical (3 inputs):
+- nodeId 45: Missing label (only has placeholder)
+- nodeId 58: Missing label
+- nodeId 62: Missing label
+
+⚠️ Warning (8 inputs):
+- nodeId 42, 51, 55, 59, 63, 67, 71, 75: Missing autocomplete attribute
+
+Recommendations:
+1. Add aria-label or label prop to all inputs
+2. Add autocomplete for better UX (email, name, tel, etc.)
+```
+
+**Result:** Found 3 critical issues, 8 warnings. Generated fix list with exact file locations.
+
+---
 
 ## Requirements
 
