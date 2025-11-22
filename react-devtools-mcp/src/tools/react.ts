@@ -839,6 +839,179 @@ export const getReactComponentFromSnapshot = defineTool({
   },
 });
 
+// Production tool: Get React component info from backendDOMNodeId (CDP approach)
+export const getReactComponentFromBackendNodeId = defineTool({
+  name: 'get_react_component_from_backend_node_id',
+  description: 'Get React component info for an element using CDP backendDOMNodeId. Faster and more deterministic than ARIA selectors. Use backendDOMNodeId from take_snapshot.',
+  schema: {
+    backendDOMNodeId: zod.number().describe('Backend DOM node ID from CDP Accessibility tree (from take_snapshot)'),
+  },
+  handler: async (request, response, context) => {
+    await context.ensureReactAttached();
+
+    const {backendDOMNodeId} = request.params;
+    const page = (context as any).getSelectedPage();
+
+    try {
+      const client = (page as any)._client();
+
+      // Enable required CDP domains
+      await client.send('DOM.enable');
+      await client.send('DOM.getDocument');
+
+      // Resolve backendNodeId to RemoteObject
+      const {object} = await client.send('DOM.resolveNode', {
+        backendNodeId: backendDOMNodeId,
+      });
+
+      if (!object || !object.objectId) {
+        response.appendResponseLine(JSON.stringify({
+          success: false,
+          error: 'Failed to resolve backendNodeId to DOM element',
+          backendDOMNodeId,
+        }, null, 2));
+        return;
+      }
+
+      // Extract React component data using the same logic as ARIA approach
+      const result = await client.send('Runtime.callFunctionOn', {
+        objectId: object.objectId,
+        functionDeclaration: `function() {
+          const targetElement = this;
+
+          if (!targetElement) {
+            return {success: false, error: 'Element is null'};
+          }
+
+          // Get fiber from element
+          const keys = Object.keys(targetElement);
+          const fiberKey = keys.find(k => k.startsWith('__reactFiber'));
+          if (!fiberKey) {
+            return {success: false, error: 'Element has no React fiber'};
+          }
+
+          let fiber = targetElement[fiberKey];
+          let maxSteps = 20;
+          while (fiber && maxSteps > 0) {
+            maxSteps--;
+            if ([0, 1, 11, 15].includes(fiber.tag)) {
+              break;
+            }
+            fiber = fiber.return;
+          }
+
+          if (!fiber) {
+            return {success: false, error: 'No React component found in fiber tree'};
+          }
+
+          // Helper functions
+          const getComponentName = (fiber) => {
+            if (fiber.type?.displayName) return fiber.type.displayName;
+            switch (fiber.tag) {
+              case 0:
+              case 1:
+                return fiber.type?.name || fiber.elementType?.name || 'Anonymous';
+              case 11:
+                return fiber.type?.render?.displayName || fiber.type?.render?.name || 'ForwardRef';
+              case 15:
+                return fiber.type?.type?.displayName || fiber.type?.type?.name || 'Memo';
+              default:
+                return 'Unknown';
+            }
+          };
+
+          const getComponentType = (tag) => {
+            const types = {
+              0: 'FunctionComponent',
+              1: 'ClassComponent',
+              11: 'ForwardRef',
+              15: 'MemoComponent',
+            };
+            return types[tag] || 'UnknownTag(' + tag + ')';
+          };
+
+          const safeSerialize = (obj, maxDepth, seen) => {
+            if (maxDepth === undefined) maxDepth = 3;
+            if (seen === undefined) seen = new WeakSet();
+            if (obj === null || obj === undefined) return obj;
+            if (typeof obj !== 'object') return obj;
+            if (seen.has(obj)) return '[Circular]';
+            seen.add(obj);
+            if (maxDepth <= 0) return '[Max Depth]';
+            if (Array.isArray(obj)) return obj.slice(0, 100).map(item => safeSerialize(item, maxDepth - 1, seen));
+            if (obj.$$typeof) return '[React Element]';
+            if (obj instanceof Node) return '[DOM Node]';
+            if (typeof obj === 'function') return '[Function: ' + (obj.name || 'anonymous') + ']';
+            const result = {};
+            const entries = Object.entries(obj).slice(0, 50);
+            for (let i = 0; i < entries.length; i++) {
+              const key = entries[i][0];
+              const value = entries[i][1];
+              if (key.startsWith('__react')) continue;
+              result[key] = safeSerialize(value, maxDepth - 1, seen);
+            }
+            return result;
+          };
+
+          const extractSource = (fiber) => {
+            const props = fiber.memoizedProps;
+            if (!props) return null;
+            const fileName = props['data-inspector-relative-path'];
+            const lineNumber = props['data-inspector-line'];
+            const columnNumber = props['data-inspector-column'];
+            if (fileName || lineNumber || columnNumber) {
+              return {
+                fileName: fileName || undefined,
+                lineNumber: lineNumber ? parseInt(lineNumber, 10) : undefined,
+                columnNumber: columnNumber ? parseInt(columnNumber, 10) : undefined,
+              };
+            }
+            return null;
+          };
+
+          // Extract owners
+          const owners = [];
+          let current = fiber.return;
+          let maxOwners = 10;
+          while (current && maxOwners > 0) {
+            if ([0, 1, 11, 15].includes(current.tag)) {
+              const name = getComponentName(current);
+              const type = getComponentType(current.tag);
+              const source = extractSource(current);
+              const owner = {name: name, type: type};
+              if (source) owner.source = source;
+              owners.push(owner);
+              maxOwners--;
+            }
+            current = current.return;
+          }
+
+          return {
+            success: true,
+            component: {
+              name: getComponentName(fiber),
+              type: getComponentType(fiber.tag),
+              props: fiber.memoizedProps ? safeSerialize(fiber.memoizedProps, 3) : null,
+              state: fiber.memoizedState ? safeSerialize(fiber.memoizedState, 2) : null,
+              source: extractSource(fiber),
+              owners: owners,
+            },
+          };
+        }`,
+        returnByValue: true,
+      });
+
+      response.appendResponseLine(JSON.stringify(result.result.value, null, 2));
+    } catch (error: any) {
+      response.appendResponseLine(JSON.stringify({
+        success: false,
+        error: error.message,
+        stack: error.stack,
+      }, null, 2));
+    }
+  },
+});
+
 // Test 1: Basic ARIA selector test
 export const testAriaSelector = defineTool({
   name: 'test_aria_selector',
@@ -1423,6 +1596,7 @@ export const tools = [
   highlightComponent,
   takeSnapshot,
   getReactComponentFromSnapshot,
+  getReactComponentFromBackendNodeId,
   debugFiberKeys,
   debugFiberWalk,
   debugExtractMetadata,
