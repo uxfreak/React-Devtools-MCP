@@ -1615,6 +1615,8 @@ export const testCdpExtractFiber = defineTool({
 });
 
 // Production tools only - debug and test tools excluded
+// Removed: ensureReactAttached, listReactRoots, listComponents, getComponent, highlightComponent, getReactComponentFromSnapshot
+// These are kept as internal utilities but not exposed as MCP tools
 export const tools = [
   // Page management tools
   listPages,
@@ -1623,13 +1625,7 @@ export const tools = [
   newPage,
   navigatePage,
   // React DevTools tools
-  ensureReactAttached,
-  listReactRoots,
-  listComponents,
-  getComponent,
-  highlightComponent,
   takeSnapshot,
   getComponentMap,
-  getReactComponentFromSnapshot,
   getReactComponentFromBackendNodeId,
 ];
