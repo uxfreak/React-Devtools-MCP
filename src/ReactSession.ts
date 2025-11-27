@@ -622,11 +622,36 @@ export class ReactSession {
 
             // Add props summary if available
             if (fiber.memoizedProps) {
+              const propsToShow: string[] = [];
               const propsKeys = Object.keys(fiber.memoizedProps).filter(
                 k => !k.startsWith('__react') && !k.startsWith('data-inspector') && k !== 'children',
               );
-              if (propsKeys.length > 0) {
-                line += ` {${propsKeys.slice(0, 3).join(', ')}}`;
+
+              for (const key of propsKeys.slice(0, 3)) {
+                const value = fiber.memoizedProps[key];
+                let formattedValue: string;
+
+                if (typeof value === 'string') {
+                  // Show string with quotes, truncate if too long
+                  const truncated = value.length > 20 ? value.slice(0, 20) + '...' : value;
+                  formattedValue = `${key}="${truncated}"`;
+                } else if (typeof value === 'number' || typeof value === 'boolean') {
+                  formattedValue = `${key}={${value}}`;
+                } else if (typeof value === 'function') {
+                  formattedValue = `${key}={fn}`;
+                } else if (value === null || value === undefined) {
+                  formattedValue = `${key}={${value}}`;
+                } else if (typeof value === 'object') {
+                  formattedValue = `${key}={...}`;
+                } else {
+                  formattedValue = key;
+                }
+
+                propsToShow.push(formattedValue);
+              }
+
+              if (propsToShow.length > 0) {
+                line += ` {${propsToShow.join(', ')}}`;
               }
             }
 
