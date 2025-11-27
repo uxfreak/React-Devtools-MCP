@@ -624,7 +624,7 @@ export class ReactSession {
             if (fiber.memoizedProps) {
               const propsToShow: string[] = [];
               const propsKeys = Object.keys(fiber.memoizedProps).filter(
-                k => !k.startsWith('__react') && !k.startsWith('data-inspector') && k !== 'children',
+                k => !k.startsWith('__react') && !k.startsWith('data-inspector') && !k.startsWith('data-function') && k !== 'children',
               );
 
               for (const key of propsKeys.slice(0, 3)) {
@@ -731,11 +731,45 @@ export class ReactSession {
               walkFiber(child, depth + 1, childPrefix + connector + ' ', isLastChild);
             });
           } else if (isHostElement) {
-            // For host elements, still traverse children to find components
-            let child = fiber.child;
-            while (child) {
-              walkFiber(child, depth, prefix, isLast);
-              child = child.sibling;
+            // For host elements, only show if they have semantic a11y info
+            const a11yInfo = getA11yInfo(fiber);
+
+            if (a11yInfo && a11yInfo.role && isSemanticOrInteractive(a11yInfo.role)) {
+              // This host element has semantic a11y info, show it
+              const name = fiber.type || 'HostElement';
+              let line = prefix + name;
+
+              // Add ARIA attributes
+              const ariaParts: string[] = [];
+              if (a11yInfo.role) ariaParts.push(`role="${a11yInfo.role}"`);
+              if (a11yInfo.name) ariaParts.push(`name="${a11yInfo.name}"`);
+              if (ariaParts.length > 0) {
+                line += ` [${ariaParts.join(' ')}]`;
+              }
+
+              lines.push(line);
+
+              // Process children
+              const childPrefix = prefix.replace(/├─/g, '│ ').replace(/└─/g, '  ');
+              let child = fiber.child;
+              const children: any[] = [];
+              while (child) {
+                children.push(child);
+                child = child.sibling;
+              }
+
+              children.forEach((child, idx) => {
+                const isLastChild = idx === children.length - 1;
+                const connector = isLastChild ? '└─' : '├─';
+                walkFiber(child, depth + 1, childPrefix + connector + ' ', isLastChild);
+              });
+            } else {
+              // No semantic a11y info, just traverse children without showing this element
+              let child = fiber.child;
+              while (child) {
+                walkFiber(child, depth, prefix, isLast);
+                child = child.sibling;
+              }
             }
           } else {
             // Other fiber types, just traverse children
