@@ -392,9 +392,82 @@ export class ReactSession {
     };
     buildAxMap(snapshot.root);
 
+    // Build accessibility hierarchy map (parent backendId -> child backendIds)
+    const a11yHierarchy = new Map<number, number[]>();
+    const buildA11yHierarchy = (node: any) => {
+      if (node.backendDOMNodeId) {
+        const childIds: number[] = [];
+        if (node.children) {
+          for (const child of node.children) {
+            if (child.backendDOMNodeId) {
+              childIds.push(child.backendDOMNodeId);
+            }
+            buildA11yHierarchy(child);
+          }
+        }
+        a11yHierarchy.set(node.backendDOMNodeId, childIds);
+      }
+    };
+    buildA11yHierarchy(snapshot.root);
+
+    // Filter for semantic/interactive roles
+    const isSemanticOrInteractive = (role: string | undefined): boolean => {
+      if (!role) return false;
+
+      const semanticRoles = new Set([
+        'button', 'link', 'checkbox', 'radio', 'textbox', 'searchbox',
+        'heading', 'banner', 'navigation', 'main', 'complementary',
+        'form', 'region', 'article', 'section',
+        'menu', 'menuitem', 'tab', 'tabpanel',
+        'dialog', 'alert', 'alertdialog',
+        'img', 'figure', 'table', 'row', 'cell',
+        'list', 'listitem', 'tree', 'treeitem'
+      ]);
+
+      const skipRoles = new Set(['generic', 'StaticText', 'InlineTextBox', 'none', 'presentation']);
+
+      return !skipRoles.has(role) && (semanticRoles.has(role) || role.length > 0);
+    };
+
+    // Inject tracking attributes into DOM elements via CDP
+    const client = (this.#page as any)._client();
+    for (const [backendId, axInfo] of axNodeMap.entries()) {
+      // Skip non-semantic nodes early to reduce CDP calls
+      if (!isSemanticOrInteractive(axInfo.role)) {
+        continue;
+      }
+
+      try {
+        const {object} = await client.send('DOM.resolveNode', {backendNodeId: backendId});
+
+        await client.send('Runtime.callFunctionOn', {
+          objectId: object.objectId,
+          functionDeclaration: `function(backendId, role, name) {
+            if (this.setAttribute) {
+              this.setAttribute('data-ax-backend-id', backendId);
+              this.__axRole = role;
+              this.__axName = name;
+            }
+          }`,
+          arguments: [
+            {value: backendId},
+            {value: axInfo.role || ''},
+            {value: axInfo.name || ''}
+          ]
+        });
+      } catch (e) {
+        // Some nodes might not be resolvable, skip them
+        continue;
+      }
+    }
+
+    // Convert maps to plain objects for passing to page context
+    const axNodeMapObj = Object.fromEntries(axNodeMap);
+    const a11yHierarchyObj = Object.fromEntries(a11yHierarchy);
+
     // Walk the React Fiber tree and build component tree with accessibility info
     const result = await this.#page.evaluate(
-      (includeStateArg: boolean) => {
+      (includeStateArg: boolean, axNodeMapObj: any, a11yHierarchyObj: any) => {
         const hook = (globalThis as any).__REACT_DEVTOOLS_GLOBAL_HOOK__;
         if (!hook || !hook.renderers || !hook.getFiberRoots) {
           return {error: 'React DevTools hook not found or no renderers'};
@@ -470,18 +543,57 @@ export class ReactSession {
           return result;
         };
 
-        // Helper to get backendDOMNodeId from fiber's DOM node
-        const getBackendDOMNodeId = (fiber: any): number | null => {
+        // Helper to get accessibility info from fiber's DOM node
+        const getA11yInfo = (fiber: any): {role: string; name: string; backendId: string} | null => {
           // For host components (DOM elements), stateNode is the DOM element
           if (fiber.tag === 5 && fiber.stateNode) {
-            // stateNode is the actual DOM element
             const element = fiber.stateNode;
-            // backendDOMNodeId is internal to CDP, not accessible from page context
-            // We'll return a marker to indicate we should look it up
-            return null;
+            const role = element.__axRole;
+            const name = element.__axName;
+            const backendId = element.getAttribute('data-ax-backend-id');
+
+            if (role || name || backendId) {
+              return {role, name, backendId};
+            }
           }
+
+          // For React components (tag 0, 1, 11, 15), find first host child
+          if ([0, 1, 11, 15].includes(fiber.tag)) {
+            let child = fiber.child;
+            while (child) {
+              // Recursively search for first host component
+              const childA11yInfo = getA11yInfo(child);
+              if (childA11yInfo) {
+                return childA11yInfo;
+              }
+              child = child.sibling;
+            }
+          }
+
           return null;
         };
+
+        // Filter for semantic/interactive roles
+        const isSemanticOrInteractive = (role: string | undefined): boolean => {
+          if (!role) return false;
+
+          const semanticRoles = new Set([
+            'button', 'link', 'checkbox', 'radio', 'textbox', 'searchbox',
+            'heading', 'banner', 'navigation', 'main', 'complementary',
+            'form', 'region', 'article', 'section',
+            'menu', 'menuitem', 'tab', 'tabpanel',
+            'dialog', 'alert', 'alertdialog',
+            'img', 'figure', 'table', 'row', 'cell',
+            'list', 'listitem', 'tree', 'treeitem'
+          ]);
+
+          const skipRoles = new Set(['generic', 'StaticText', 'InlineTextBox', 'none', 'presentation']);
+
+          return !skipRoles.has(role) && (semanticRoles.has(role) || role.length > 0);
+        };
+
+        // Build set of backendIds that have React components
+        const backendIdsWithComponents = new Set<number>();
 
         // Walk fiber tree depth-first and collect components
         const lines: string[] = [];
@@ -498,6 +610,12 @@ export class ReactSession {
           if (isComponent) {
             const name = getComponentName(fiber);
             const source = extractSource(fiber);
+            const a11yInfo = getA11yInfo(fiber);
+
+            // Track backendIds that have React components
+            if (a11yInfo && a11yInfo.backendId) {
+              backendIdsWithComponents.add(parseInt(a11yInfo.backendId, 10));
+            }
 
             let line = prefix;
             line += name;
@@ -523,6 +641,16 @@ export class ReactSession {
               }
             }
 
+            // Add ARIA attributes if available
+            if (a11yInfo && (a11yInfo.role || a11yInfo.name)) {
+              const ariaParts: string[] = [];
+              if (a11yInfo.role) ariaParts.push(`role="${a11yInfo.role}"`);
+              if (a11yInfo.name) ariaParts.push(`name="${a11yInfo.name}"`);
+              if (ariaParts.length > 0) {
+                line += ` [${ariaParts.join(' ')}]`;
+              }
+            }
+
             // Add source location
             if (source) {
               const loc = source.fileName
@@ -538,7 +666,33 @@ export class ReactSession {
             // Update prefix for children
             const childPrefix = prefix.replace(/├─/g, '│ ').replace(/└─/g, '  ');
 
-            // Process children
+            // Insert accessibility-only child nodes
+            if (a11yInfo && a11yInfo.backendId) {
+              const backendId = parseInt(a11yInfo.backendId, 10);
+              const a11yChildren = a11yHierarchyObj[backendId] || [];
+
+              // Filter to only a11y-only nodes (not React components)
+              const a11yOnlyChildren = a11yChildren.filter((childId: number) => {
+                const childAxInfo = axNodeMapObj[childId];
+                return childAxInfo && !backendIdsWithComponents.has(childId) && isSemanticOrInteractive(childAxInfo.role);
+              });
+
+              // Display a11y-only children
+              for (let i = 0; i < a11yOnlyChildren.length; i++) {
+                const childId = a11yOnlyChildren[i];
+                const childAxInfo = axNodeMapObj[childId];
+                if (childAxInfo) {
+                  const ariaParts: string[] = [];
+                  if (childAxInfo.role) ariaParts.push(`role="${childAxInfo.role}"`);
+                  if (childAxInfo.name) ariaParts.push(`name="${childAxInfo.name}"`);
+
+                  const childLine = childPrefix + '├─ ' + `[${ariaParts.join(' ')}]`;
+                  lines.push(childLine);
+                }
+              }
+            }
+
+            // Process React children
             let child = fiber.child;
             const children: any[] = [];
             while (child) {
@@ -595,6 +749,8 @@ export class ReactSession {
         return {lines};
       },
       includeState,
+      axNodeMapObj,
+      a11yHierarchyObj,
     );
 
     if ('error' in result) {
