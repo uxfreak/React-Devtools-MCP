@@ -90,6 +90,8 @@ export class ReactSession {
         globalThis.__REACT_DEVTOOLS_GLOBAL_HOOK__ = hook;
       })();
     `;
+
+    console.error('[ensureBackendInjected] Registering evaluateOnNewDocument');
     await this.#page.evaluateOnNewDocument((source, bootstrap) => {
       try {
         // eslint-disable-next-line no-eval
@@ -101,16 +103,22 @@ export class ReactSession {
       }
     }, backendSource, hookBootstrap);
 
-    let hasHook = await this.#page.evaluate(() => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return Boolean((window as any).__REACT_DEVTOOLS_GLOBAL_HOOK__);
+    // Check if hook exists AND has renderers
+    const hasRenderers = await this.#page.evaluate(() => {
+      const hook = (globalThis as any).__REACT_DEVTOOLS_GLOBAL_HOOK__;
+      if (!hook || !hook.renderers) return false;
+      return hook.renderers.size > 0;
     });
-    if (hasHook) {
+
+    console.error(`[ensureBackendInjected] Hook exists in current page with renderers: ${hasRenderers}`);
+
+    if (hasRenderers) {
       this.#backendInjected = true;
+      console.error('[ensureBackendInjected] Hook already exists with renderers, marked as injected');
       return;
     }
 
-    logger(`Injecting React DevTools backend from ${backendPath}`);
+    console.error(`[ensureBackendInjected] Hook not found, attempting runtime injection`);
     try {
       // Re-install at runtime to win against any later shims.
       await this.#page.evaluate((source, bootstrap) => {
@@ -126,15 +134,33 @@ export class ReactSession {
         return Boolean((window as any).__REACT_DEVTOOLS_GLOBAL_HOOK__);
       }, backendSource, hookBootstrap);
 
-      // If hook still absent, reload once to let the init script run before React loads.
-      hasHook = await this.#page.evaluate(() => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        return Boolean((window as any).__REACT_DEVTOOLS_GLOBAL_HOOK__);
+      // Check if hook exists AND has renderers registered
+      const hasRenderers = await this.#page.evaluate(() => {
+        const hook = (globalThis as any).__REACT_DEVTOOLS_GLOBAL_HOOK__;
+        if (!hook || !hook.renderers) return false;
+        return hook.renderers.size > 0;
       });
-      if (!hasHook) {
+
+      console.error(`[ensureBackendInjected] After runtime injection, has renderers: ${hasRenderers}`);
+
+      // If hook exists but no renderers, React loaded before the hook
+      // Need to reload so hook is injected BEFORE React loads
+      if (!hasRenderers) {
+        console.error('[ensureBackendInjected] No renderers registered, reloading page to inject hook before React loads');
         await this.#page.reload({waitUntil: 'domcontentloaded'});
+        console.error('[ensureBackendInjected] Page reload complete');
+
+        // After reload, verify hook has renderers
+        const hasRenderersAfterReload = await this.#page.evaluate(() => {
+          const hook = (globalThis as any).__REACT_DEVTOOLS_GLOBAL_HOOK__;
+          if (!hook || !hook.renderers) return false;
+          return hook.renderers.size > 0;
+        });
+        console.error(`[ensureBackendInjected] After reload, has renderers: ${hasRenderersAfterReload}`);
       }
+
       this.#backendInjected = true;
+      console.error('[ensureBackendInjected] Marked as injected');
     } catch (error) {
       logger(`Failed to inject React DevTools backend: ${String(error)}`);
       throw new Error(
@@ -369,6 +395,9 @@ export class ReactSession {
   }
 
   async getComponentMap(verbose = true, includeState = false): Promise<string | null> {
+    // Ensure React DevTools backend is injected before accessing React internals
+    await this.ensureBackendInjected();
+
     // Get accessibility snapshot with backendDOMNodeId for correlation
     const snapshot = await this.takeSnapshot(verbose);
     if (!snapshot) {
@@ -469,6 +498,7 @@ export class ReactSession {
     const result = await this.#page.evaluate(
       (includeStateArg: boolean, axNodeMapObj: any, a11yHierarchyObj: any) => {
         const hook = (globalThis as any).__REACT_DEVTOOLS_GLOBAL_HOOK__;
+
         if (!hook || !hook.renderers || !hook.getFiberRoots) {
           return {error: 'React DevTools hook not found or no renderers'};
         }
